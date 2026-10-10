@@ -14,6 +14,16 @@ const MA_COLORS = {
 };
 
 const RECENT_DAILY_BARS = 63; // 近三個月約 63 個交易日
+const MONTH_DAYS = 30;
+
+const YAHOO_QUOTE = 'https://finance.yahoo.com/quote/';
+
+/* 排序選項；key 對應 applySort() 的分支 */
+const SORTS = [
+  { key: 'default', label: '預設順序' },
+  { key: 'gain', label: '近一月漲幅' },
+  { key: 'loss', label: '近一月跌幅' },
+];
 
 const state = {
   ma: new Set([20, 60]),
@@ -21,6 +31,12 @@ const state = {
   daily: new Map(),    // ticker -> Bar[]
   hourly: new Map(),   // ticker -> Bar[] 或進行中的 Promise
   panes: new Map(),    // ticker -> { left, right }
+  rows: new Map(),     // ticker -> <section.row>
+  names: {},           // ticker -> 中文公司名
+  month: new Map(),    // ticker -> 近一個月漲跌 %
+  order: [],           // 資料原始順序
+  errors: new Set(),   // 日線沿用前次資料的 ticker
+  sort: 'default',
 };
 
 /* ---------- 資料 ---------- */
@@ -67,6 +83,23 @@ function yearRange(bars) {
     if (bar.low < low) low = bar.low;
   }
   return { high, low };
+}
+
+/* 近一個月漲跌 %：基準是最後一根往前推 30 個日曆天當天或之前的那根收盤價 */
+function monthChange(bars) {
+  const last = bars[bars.length - 1];
+  const cutoff = new Date(`${last.time}T00:00:00Z`);
+  cutoff.setUTCDate(cutoff.getUTCDate() - MONTH_DAYS);
+  const cutoffDate = cutoff.toISOString().slice(0, 10);
+
+  let base = bars[0];
+  for (let i = bars.length - 1; i >= 0; i -= 1) {
+    if (bars[i].time <= cutoffDate) {
+      base = bars[i];
+      break;
+    }
+  }
+  return base.close ? ((last.close - base.close) / base.close) * 100 : 0;
 }
 
 /* ---------- 圖表 ---------- */
@@ -199,13 +232,26 @@ function formatChange(diff, pct) {
   return `${sign}${diff.toFixed(2)} (${sign}${pct.toFixed(2)}%)`;
 }
 
+const changeClass = (value) => (value > 0 ? 'up' : value < 0 ? 'down' : 'flat');
+
 function buildSymbolCell(symbol, bars) {
   const cell = document.createElement('div');
   cell.className = 'sym';
 
-  const ticker = document.createElement('div');
+  const name = state.names[symbol] || symbol;
+
+  const ticker = document.createElement('a');
   ticker.className = 'ticker';
+  ticker.href = `${YAHOO_QUOTE}${encodeURIComponent(symbol)}`;
+  ticker.target = '_blank';
+  ticker.rel = 'noopener';
   ticker.textContent = symbol;
+  ticker.title = `在 Yahoo Finance 看 ${symbol}（${name}）`;
+
+  const company = document.createElement('div');
+  company.className = 'company';
+  company.textContent = name;
+  company.title = name;
 
   const last = bars[bars.length - 1];
   const prev = bars[bars.length - 2] || last;
@@ -217,8 +263,13 @@ function buildSymbolCell(symbol, bars) {
   price.textContent = last.close.toFixed(2);
 
   const chg = document.createElement('div');
-  chg.className = `chg ${diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat'}`;
+  chg.className = `chg ${changeClass(diff)}`;
   chg.textContent = formatChange(diff, pct);
+
+  const change = state.month.get(symbol) ?? 0;
+  const month = document.createElement('div');
+  month.className = `month ${changeClass(change)}`;
+  month.textContent = `1月 ${change > 0 ? '+' : ''}${change.toFixed(2)}%`;
 
   const volBtn = document.createElement('button');
   volBtn.className = `vol-btn${state.volume.has(symbol) ? ' on' : ''}`;
@@ -233,7 +284,7 @@ function buildSymbolCell(symbol, bars) {
     }
   });
 
-  cell.append(ticker, price, chg, volBtn);
+  cell.append(ticker, company, price, chg, month, volBtn);
   return cell;
 }
 
@@ -364,6 +415,42 @@ function renderMAControls() {
   }
 }
 
+/* ---------- 排序 ---------- */
+
+function applySort(key) {
+  state.sort = key;
+  const order = [...state.order];
+
+  if (key === 'gain') {
+    order.sort((a, b) => (state.month.get(b) ?? 0) - (state.month.get(a) ?? 0));
+  } else if (key === 'loss') {
+    order.sort((a, b) => (state.month.get(a) ?? 0) - (state.month.get(b) ?? 0));
+  }
+
+  /* append 會搬移既有節點，圖表實例跟著版面一起移動，不需重建 */
+  const list = document.getElementById('list');
+  for (const symbol of order) {
+    const row = state.rows.get(symbol);
+    if (row) list.append(row);
+  }
+
+  for (const button of document.querySelectorAll('#sorts button')) {
+    button.classList.toggle('on', button.dataset.sort === key);
+  }
+}
+
+function renderSortControls() {
+  const host = document.getElementById('sorts');
+  for (const { key, label } of SORTS) {
+    const button = document.createElement('button');
+    button.className = key === state.sort ? 'on' : '';
+    button.dataset.sort = key;
+    button.textContent = label;
+    button.addEventListener('click', () => applySort(key));
+    host.append(button);
+  }
+}
+
 function observeRows() {
   const observer = new IntersectionObserver((entries) => {
     for (const entry of entries) {
@@ -415,14 +502,23 @@ async function boot() {
     document.getElementById('warnings').textContent = `· ${parts.join('、')}`;
   }
 
+  state.names = payload.names || {};
+  state.order = payload.order;
+
   const list = document.getElementById('list');
   const fragment = document.createDocumentFragment();
   for (const symbol of payload.order) {
-    state.daily.set(symbol, (payload.tickers[symbol]?.bars || []).map(toBar));
-    fragment.append(buildRow(symbol));
+    const bars = (payload.tickers[symbol]?.bars || []).map(toBar);
+    state.daily.set(symbol, bars);
+    state.month.set(symbol, bars.length ? monthChange(bars) : 0);
+
+    const row = buildRow(symbol);
+    state.rows.set(symbol, row);
+    fragment.append(row);
   }
   list.append(fragment);
 
+  renderSortControls();
   observeRows();
 }
 

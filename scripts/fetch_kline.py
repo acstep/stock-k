@@ -27,6 +27,51 @@ TICKERS = [
     "LUMN",
 ]
 
+# 中文公司名。沒有通用中文譯名的公司直接保留英文名，不要硬翻。
+NAMES = {
+    "NVDA": "輝達",
+    "PLTR": "Palantir",
+    "MU": "美光",
+    "MSFT": "微軟",
+    "AMD": "超微",
+    "VRT": "Vertiv",
+    "META": "Meta",
+    "ARM": "安謀",
+    "AVGO": "博通",
+    "GLW": "康寧",
+    "AMAT": "應用材料",
+    "NET": "Cloudflare",
+    "GOOGL": "谷歌",
+    "AMZN": "亞馬遜",
+    "GEV": "GE Vernova",
+    "ANET": "Arista",
+    "ZS": "Zscaler",
+    "MRVL": "邁威爾",
+    "CRWD": "CrowdStrike",
+    "DELL": "戴爾",
+    "ETN": "伊頓",
+    "PANW": "Palo Alto",
+    "SNOW": "Snowflake",
+    "QCOM": "高通",
+    "CIEN": "Ciena",
+    "CEG": "星座能源",
+    "ASX": "日月光投控",
+    "OKTA": "Okta",
+    "CSCO": "思科",
+    "ENPH": "Enphase",
+    "NTAP": "NetApp",
+    "AMKR": "艾克爾",
+    "HPQ": "惠普",
+    "SMCI": "美超微",
+    "NEE": "新紀元能源",
+    "INTC": "英特爾",
+    "SPXC": "SPX",
+    "VST": "Vistra",
+    "NRG": "NRG Energy",
+    "WDC": "威騰電子",
+    "LUMN": "Lumen",
+}
+
 DATA_DIR = Path(__file__).resolve().parents[1] / "docs" / "data"
 DAILY_PATH = DATA_DIR / "daily.json"
 HOURLY_DIR = DATA_DIR / "hourly"
@@ -140,6 +185,7 @@ def main() -> int:
     payload = {
         "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "order": TICKERS,
+        "names": {symbol: NAMES.get(symbol, symbol) for symbol in TICKERS},
         "tickers": tickers,
         "errors": errors,
     }
