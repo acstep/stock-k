@@ -2,15 +2,15 @@
 
 const LWC = LightweightCharts;
 
-/* 台灣慣例：紅漲綠跌 */
-const UP = '#f6465d';
-const DOWN = '#0ecb81';
-const FLAT = '#7d8699';
+/* 美式慣例：綠漲紅跌 */
+const UP = '#16a34a';
+const DOWN = '#dc2626';
+const FLAT = '#6b7480';
 
 const MA_PERIODS = [5, 10, 20, 60, 120, 200];
 const MA_COLORS = {
-  5: '#f0b90b', 10: '#c084fc', 20: '#38bdf8',
-  60: '#fb923c', 120: '#f472b6', 200: '#94a3b8',
+  5: '#f59e0b', 10: '#a855f7', 20: '#0ea5e9',
+  60: '#f97316', 120: '#ec4899', 200: '#334155',
 };
 
 const RECENT_DAILY_BARS = 63; // 近三個月約 63 個交易日
@@ -31,8 +31,8 @@ const toBar = ([time, open, high, low, close, volume]) =>
 const monospace = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 
 function volumeColor(bar, alpha) {
-  const rgb = bar.close >= bar.open ? '246,70,93' : '14,203,129';
-  return `rgba(${rgb},${alpha})`;
+  const hex = Math.round(alpha * 255).toString(16).padStart(2, '0');
+  return (bar.close >= bar.open ? UP : DOWN) + hex;
 }
 
 async function loadHourly(symbol) {
@@ -76,21 +76,21 @@ function chartOptions(intraday) {
     autoSize: true,
     layout: {
       background: { type: LWC.ColorType.Solid, color: 'rgba(0,0,0,0)' },
-      textColor: '#7d8699',
+      textColor: '#5b6472',
       fontSize: 10,
       fontFamily: monospace,
     },
     grid: {
-      vertLines: { color: 'rgba(255,255,255,0.035)' },
-      horzLines: { color: 'rgba(255,255,255,0.035)' },
+      vertLines: { color: 'rgba(15,23,42,0.055)' },
+      horzLines: { color: 'rgba(15,23,42,0.055)' },
     },
     rightPriceScale: {
-      borderColor: 'rgba(255,255,255,0.07)',
+      borderColor: 'rgba(15,23,42,0.10)',
       entireTextOnly: true,
       scaleMargins: { top: 0.1, bottom: 0.1 },
     },
     timeScale: {
-      borderColor: 'rgba(255,255,255,0.07)',
+      borderColor: 'rgba(15,23,42,0.10)',
       rightOffset: 1,
       fixLeftEdge: true,
       lockVisibleTimeRangeOnResize: true,
@@ -100,12 +100,12 @@ function chartOptions(intraday) {
     crosshair: {
       mode: LWC.CrosshairMode.Normal,
       vertLine: {
-        color: 'rgba(255,255,255,0.28)', width: 1,
-        style: LWC.LineStyle.Dotted, labelBackgroundColor: '#2a3040',
+        color: 'rgba(15,23,42,0.35)', width: 1,
+        style: LWC.LineStyle.Dotted, labelBackgroundColor: '#334155',
       },
       horzLine: {
-        color: 'rgba(255,255,255,0.28)', width: 1,
-        style: LWC.LineStyle.Dotted, labelBackgroundColor: '#2a3040',
+        color: 'rgba(15,23,42,0.35)', width: 1,
+        style: LWC.LineStyle.Dotted, labelBackgroundColor: '#334155',
       },
     },
     /* 41 列頁面裡，圖表不能搶走滾輪 */
@@ -132,8 +132,8 @@ function buildChart(el, bars, symbol, intraday) {
   if (yearly) {
     const { high, low } = yearRange(yearly);
     for (const [price, color, title] of [
-      [high, '#f0b90b', '52週高'],
-      [low, '#64748b', '52週低'],
+      [high, '#64748b', '52週高'],
+      [low, '#94a3b8', '52週低'],
     ]) {
       if (Number.isFinite(price)) {
         candles.createPriceLine({
@@ -334,7 +334,7 @@ function renderUpdated(iso) {
   el.textContent = `資料時間 ${text} 台北`;
   if (Date.now() - when.getTime() > 30 * 3600 * 1000) {
     el.textContent += ' · 已逾 30 小時';
-    el.style.color = '#f0b90b';
+    el.style.color = '#b45309';
   }
 }
 

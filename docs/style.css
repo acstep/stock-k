@@ -1,14 +1,15 @@
 :root {
-  --bg: #0a0c11;
-  --panel: #11141c;
-  --panel-2: #161a24;
-  --border: #1e2430;
-  --text: #e6e9ef;
-  --muted: #7d8699;
-  /* 台灣慣例：紅漲綠跌 */
-  --up: #f6465d;
-  --down: #0ecb81;
-  --row-h: 196px;
+  --bg: #ffffff;
+  --stripe: #fbfcfd;
+  --panel: #f1f5f9;
+  --panel-2: #eef2f7;
+  --border: #e4e8ee;
+  --text: #111721;
+  --muted: #6b7480;
+  /* 美式慣例：綠漲紅跌 */
+  --up: #16a34a;
+  --down: #dc2626;
+  --row-h: 294px;
   --sym-w: 132px;
 }
 
@@ -35,7 +36,7 @@ html, body {
   gap: 20px;
   height: 54px;
   padding: 0 18px;
-  background: rgba(10, 12, 17, 0.88);
+  background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
@@ -74,11 +75,11 @@ html, body {
   transition: color 0.12s, border-color 0.12s, background 0.12s;
 }
 
-.ma-controls label:hover { border-color: #2c3444; }
+.ma-controls label:hover { border-color: #cfd6df; }
 
 .ma-controls label:has(input:checked) {
   color: var(--text);
-  border-color: #39414f;
+  border-color: #c3cbd6;
   background: var(--panel-2);
 }
 
@@ -104,7 +105,7 @@ html, body {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-.meta .warn { color: #f0b90b; }
+.meta .warn { color: #b45309; }
 
 /* ---------- rows ---------- */
 
@@ -112,14 +113,14 @@ main { padding-bottom: 40px; }
 
 .row {
   display: grid;
-  grid-template-columns: var(--sym-w) minmax(0, 1.45fr) minmax(0, 1fr);
+  grid-template-columns: var(--sym-w) minmax(0, 1fr) minmax(0, 1fr);
   grid-template-rows: var(--row-h);
   height: var(--row-h);
   border-bottom: 1px solid var(--border);
   background: var(--bg);
 }
 
-.row:nth-child(even) { background: #0c0f16; }
+.row:nth-child(even) { background: var(--stripe); }
 
 /* symbol column */
 
@@ -172,12 +173,12 @@ main { padding-bottom: 40px; }
   transition: color 0.12s, border-color 0.12s, background 0.12s;
 }
 
-.vol-btn:hover { color: var(--text); border-color: #2c3444; }
+.vol-btn:hover { color: var(--text); border-color: #cfd6df; }
 
 .vol-btn.on {
-  color: #0a0c11;
-  background: var(--muted);
-  border-color: var(--muted);
+  color: #ffffff;
+  background: #1e293b;
+  border-color: #1e293b;
 }
 
 /* chart panes */
@@ -226,7 +227,7 @@ main { padding-bottom: 40px; }
 .seg button:hover { color: var(--text); }
 .seg button.on {
   background: var(--panel-2);
-  border-color: #39414f;
+  border-color: #c3cbd6;
   color: var(--text);
 }
 
@@ -234,8 +235,8 @@ main { padding-bottom: 40px; }
   margin-left: 6px;
   padding: 1px 6px;
   border-radius: 4px;
-  background: rgba(240, 185, 11, 0.14);
-  color: #f0b90b;
+  background: rgba(217, 119, 6, 0.12);
+  color: #b45309;
   font-size: 10px;
 }
 
@@ -259,7 +260,7 @@ main { padding-bottom: 40px; }
 
   .sym .vol-btn { margin-top: 0; margin-left: auto; align-self: center; }
 
-  .pane { height: 220px; padding: 4px 12px; }
+  .pane { height: 330px; padding: 4px 12px; }
   .pane + .pane { border-left: 0; }
 
   .ma-controls { width: 100%; margin-left: 0; order: 3; padding-bottom: 8px; }
