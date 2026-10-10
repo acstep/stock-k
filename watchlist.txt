@@ -1,0 +1,56 @@
+# ─────────────────────────────────────────────────────────────
+#  股票清單
+#
+#  一行一檔，格式：  代號 中文名稱
+#    - 代號要用 Yahoo Finance 的代號（例如 NVDA、BRK-B、^GSPC）
+#    - 中文名稱可以省略；省略就直接顯示代號。名稱中間可以有空格。
+#    - 以 # 開頭的是註解，整行會被忽略。
+#
+#  這份檔案的「順序」＝ 網頁上「預設順序」按鈕排出來的順序。
+#  想調預設順序，就把下面的行上下移動。
+#
+#  存檔（Commit）後 GitHub 會在約 1 分鐘內自動重抓資料，不用手動跑任何東西。
+#  刪掉的股票，舊資料會一併清掉。打錯代號的話網頁那列會顯示「無資料」。
+# ─────────────────────────────────────────────────────────────
+
+NVDA   輝達
+PLTR   Palantir
+MU     美光
+MSFT   微軟
+AMD    超微
+VRT    Vertiv
+META   Meta
+ARM    安謀
+AVGO   博通
+GLW    康寧
+AMAT   應用材料
+NET    Cloudflare
+GOOGL  谷歌
+AMZN   亞馬遜
+GEV    GE Vernova
+ANET   Arista
+ZS     Zscaler
+MRVL   邁威爾
+CRWD   CrowdStrike
+DELL   戴爾
+ETN    伊頓
+PANW   Palo Alto
+SNOW   Snowflake
+QCOM   高通
+CIEN   Ciena
+CEG    星座能源
+ASX    日月光投控
+OKTA   Okta
+CSCO   思科
+ENPH   Enphase
+NTAP   NetApp
+AMKR   艾克爾
+HPQ    惠普
+SMCI   美超微
+NEE    新紀元能源
+INTC   英特爾
+SPXC   SPX
+VST    Vistra
+NRG    NRG Energy
+WDC    威騰電子
+LUMN   Lumen

@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 """Fetch daily and hourly OHLCV for the watchlist and write compact JSON for the static site.
 
+The watchlist lives in watchlist.txt at the repo root - one "SYMBOL 名稱" per
+line, and the line order is the default order shown on the page.
+
 Outputs (all consumed by docs/index.html):
   docs/data/daily.json           1y daily bars for every ticker, keyed by symbol
   docs/data/hourly/<TICKER>.json 3mo hourly bars, one file per ticker (lazy-loaded)
 
 A ticker that fails is not dropped: its previous bars are carried over from the
-existing daily.json and the failure is recorded under "errors".
+existing daily.json and the failure is recorded under "errors". Hourly files for
+tickers that left the watchlist are deleted.
 """
 
 from __future__ import annotations
@@ -19,60 +23,14 @@ from pathlib import Path
 import pandas as pd
 import yfinance as yf
 
-TICKERS = [
-    "NVDA", "PLTR", "MU", "MSFT", "AMD", "VRT", "META", "ARM", "AVGO", "GLW",
-    "AMAT", "NET", "GOOGL", "AMZN", "GEV", "ANET", "ZS", "MRVL", "CRWD", "DELL",
-    "ETN", "PANW", "SNOW", "QCOM", "CIEN", "CEG", "ASX", "OKTA", "CSCO", "ENPH",
-    "NTAP", "AMKR", "HPQ", "SMCI", "NEE", "INTC", "SPXC", "VST", "NRG", "WDC",
-    "LUMN",
-]
+# Let provider errors surface as exceptions rather than empty frames, so a broken
+# fetch can be told apart from a symbol that genuinely has no data. yfinance 1.x
+# dropped the per-call raise_errors= argument in favour of this global.
+yf.config.debug.hide_exceptions = False
 
-# 中文公司名。沒有通用中文譯名的公司直接保留英文名，不要硬翻。
-NAMES = {
-    "NVDA": "輝達",
-    "PLTR": "Palantir",
-    "MU": "美光",
-    "MSFT": "微軟",
-    "AMD": "超微",
-    "VRT": "Vertiv",
-    "META": "Meta",
-    "ARM": "安謀",
-    "AVGO": "博通",
-    "GLW": "康寧",
-    "AMAT": "應用材料",
-    "NET": "Cloudflare",
-    "GOOGL": "谷歌",
-    "AMZN": "亞馬遜",
-    "GEV": "GE Vernova",
-    "ANET": "Arista",
-    "ZS": "Zscaler",
-    "MRVL": "邁威爾",
-    "CRWD": "CrowdStrike",
-    "DELL": "戴爾",
-    "ETN": "伊頓",
-    "PANW": "Palo Alto",
-    "SNOW": "Snowflake",
-    "QCOM": "高通",
-    "CIEN": "Ciena",
-    "CEG": "星座能源",
-    "ASX": "日月光投控",
-    "OKTA": "Okta",
-    "CSCO": "思科",
-    "ENPH": "Enphase",
-    "NTAP": "NetApp",
-    "AMKR": "艾克爾",
-    "HPQ": "惠普",
-    "SMCI": "美超微",
-    "NEE": "新紀元能源",
-    "INTC": "英特爾",
-    "SPXC": "SPX",
-    "VST": "Vistra",
-    "NRG": "NRG Energy",
-    "WDC": "威騰電子",
-    "LUMN": "Lumen",
-}
-
-DATA_DIR = Path(__file__).resolve().parents[1] / "docs" / "data"
+ROOT = Path(__file__).resolve().parents[1]
+WATCHLIST_PATH = ROOT / "watchlist.txt"
+DATA_DIR = ROOT / "docs" / "data"
 DAILY_PATH = DATA_DIR / "daily.json"
 HOURLY_DIR = DATA_DIR / "hourly"
 
@@ -83,13 +41,53 @@ BACKOFF_SECONDS = 2.0
 PAUSE_SECONDS = 0.4
 
 
+def load_watchlist() -> list[tuple[str, str]]:
+    """Parse watchlist.txt into [(symbol, name), ...], preserving line order.
+
+    Format is "SYMBOL 名稱" - the name is optional and may contain spaces, so we
+    split on the first run of whitespace only. Blank lines and #-comments are
+    ignored; a # also starts an inline comment.
+    """
+    entries: list[tuple[str, str]] = []
+    seen: set[str] = set()
+
+    for lineno, raw in enumerate(WATCHLIST_PATH.read_text(encoding="utf-8").splitlines(), 1):
+        line = raw.split("#", 1)[0].strip()
+        if not line:
+            continue
+
+        symbol, _, name = line.replace("\t", " ").partition(" ")
+        symbol = symbol.strip().upper()
+        name = name.strip() or symbol
+
+        if not symbol:
+            continue
+        if symbol in seen:
+            print(f"  watchlist.txt:{lineno}  {symbol} 重複，略過")
+            continue
+
+        seen.add(symbol)
+        entries.append((symbol, name))
+
+    if not entries:
+        raise SystemExit("watchlist.txt 裡沒有任何股票，中止")
+    return entries
+
+
+def prune_hourly(keep: set[str]) -> None:
+    for path in sorted(HOURLY_DIR.glob("*.json")):
+        if path.stem not in keep:
+            path.unlink()
+            print(f"  移除 {path.name}（已不在清單中）")
+
+
 def fetch(symbol: str, period: str, interval: str) -> pd.DataFrame:
     """history() with backoff. Yahoo occasionally answers 429 to shared CI IPs."""
     last_error: Exception | None = None
     for attempt in range(ATTEMPTS):
         try:
             frame = yf.Ticker(symbol).history(
-                period=period, interval=interval, auto_adjust=True, raise_errors=True
+                period=period, interval=interval, auto_adjust=True
             )
             if frame.empty:
                 raise ValueError("empty history")
@@ -149,13 +147,18 @@ def load_previous() -> dict:
 def main() -> int:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     HOURLY_DIR.mkdir(parents=True, exist_ok=True)
+
+    watchlist = load_watchlist()
+    symbols = [symbol for symbol, _ in watchlist]
     previous = load_previous()
+
+    print(f"watchlist.txt: {len(symbols)} 檔\n")
 
     tickers: dict[str, dict] = {}
     errors: dict[str, str] = {}
     fresh = 0
 
-    for symbol in TICKERS:
+    for symbol in symbols:
         try:
             bars = daily_bars(fetch(symbol, DAILY_PERIOD, "1d"))
             tickers[symbol] = {"bars": bars}
@@ -182,18 +185,20 @@ def main() -> int:
 
         time.sleep(PAUSE_SECONDS)
 
+    prune_hourly(set(symbols))
+
     payload = {
         "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "order": TICKERS,
-        "names": {symbol: NAMES.get(symbol, symbol) for symbol in TICKERS},
+        "order": symbols,
+        "names": dict(watchlist),
         "tickers": tickers,
         "errors": errors,
     }
     DAILY_PATH.write_text(json.dumps(payload, separators=(",", ":")))
 
     size_kb = DAILY_PATH.stat().st_size / 1024
-    print(f"\n{fresh}/{len(TICKERS)} tickers refreshed, {len(errors)} errors")
-    print(f"wrote {DAILY_PATH.relative_to(DATA_DIR.parents[1])} ({size_kb:.0f} KB)")
+    print(f"\n{fresh}/{len(symbols)} tickers refreshed, {len(errors)} errors")
+    print(f"wrote {DAILY_PATH.relative_to(ROOT)} ({size_kb:.0f} KB)")
     return 0 if fresh else 1
 
 
