@@ -3,7 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>STOCK-K · 41 檔 K 線</title>
+<title>STOCK-K · K 線看板</title>
+<script>
+  /* 在第一次繪製前套用記住的主題，避免深色使用者看到白閃 */
+  try {
+    var saved = localStorage.getItem('stock-k-theme');
+    if (saved === 'dark' || saved === 'light') document.documentElement.dataset.theme = saved;
+  } catch (e) {}
+</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -15,6 +22,7 @@
       <span id="updated">載入中…</span>
       <span id="warnings" class="warn"></span>
     </div>
+    <div class="group" id="themes"><span class="label">主題</span></div>
   </div>
   <div class="bar">
     <div class="group" id="sorts"><span class="label">排序</span></div>

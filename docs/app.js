@@ -2,16 +2,46 @@
 
 const LWC = LightweightCharts;
 
-/* 美式慣例：綠漲紅跌 */
-const UP = '#16a34a';
-const DOWN = '#dc2626';
-const FLAT = '#6b7480';
+/* 兩套主題。漲跌一律美式綠漲紅跌；深色底用亮一階的綠紅以免糊掉。 */
+const THEMES = {
+  light: {
+    chart: {
+      text: '#5b6472',
+      grid: 'rgba(15,23,42,0.055)',
+      border: 'rgba(15,23,42,0.10)',
+      crosshair: 'rgba(15,23,42,0.35)',
+      crosshairLabel: '#334155',
+    },
+    candle: { up: '#16a34a', down: '#dc2626' },
+    ma: {
+      5: '#f59e0b', 10: '#a855f7', 20: '#0ea5e9',
+      60: '#f97316', 120: '#ec4899', 200: '#334155',
+    },
+    range: { high: '#64748b', low: '#94a3b8' },
+  },
+  dark: {
+    chart: {
+      text: '#7d8699',
+      grid: 'rgba(255,255,255,0.045)',
+      border: 'rgba(255,255,255,0.08)',
+      crosshair: 'rgba(255,255,255,0.28)',
+      crosshairLabel: '#2a3040',
+    },
+    candle: { up: '#22c55e', down: '#ef4444' },
+    ma: {
+      5: '#f0b90b', 10: '#c084fc', 20: '#38bdf8',
+      60: '#fb923c', 120: '#f472b6', 200: '#94a3b8',
+    },
+    range: { high: '#94a3b8', low: '#64748b' },
+  },
+};
+
+const THEMES_UI = [['light', '白底'], ['dark', '黑底']];
+const THEME_KEY = 'stock-k-theme';
 
 const MA_PERIODS = [5, 10, 20, 60, 120, 200];
-const MA_COLORS = {
-  5: '#f59e0b', 10: '#a855f7', 20: '#0ea5e9',
-  60: '#f97316', 120: '#ec4899', 200: '#334155',
-};
+
+const theme = () => THEMES[state.theme] || THEMES.light;
 
 const RECENT_DAILY_BARS = 63; // 近三個月約 63 個交易日
 const MONTH_DAYS = 30;
@@ -37,6 +67,7 @@ const state = {
   order: [],           // 資料原始順序
   errors: new Set(),   // 日線沿用前次資料的 ticker
   sort: 'default',
+  theme: 'light',
 };
 
 /* ---------- 資料 ---------- */
@@ -48,7 +79,8 @@ const monospace = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 
 function volumeColor(bar, alpha) {
   const hex = Math.round(alpha * 255).toString(16).padStart(2, '0');
-  return (bar.close >= bar.open ? UP : DOWN) + hex;
+  const { up, down } = theme().candle;
+  return (bar.close >= bar.open ? up : down) + hex;
 }
 
 async function loadHourly(symbol) {
@@ -105,25 +137,26 @@ function monthChange(bars) {
 /* ---------- 圖表 ---------- */
 
 function chartOptions(intraday) {
+  const t = theme().chart;
   return {
     autoSize: true,
     layout: {
       background: { type: LWC.ColorType.Solid, color: 'rgba(0,0,0,0)' },
-      textColor: '#5b6472',
+      textColor: t.text,
       fontSize: 10,
       fontFamily: monospace,
     },
     grid: {
-      vertLines: { color: 'rgba(15,23,42,0.055)' },
-      horzLines: { color: 'rgba(15,23,42,0.055)' },
+      vertLines: { color: t.grid },
+      horzLines: { color: t.grid },
     },
     rightPriceScale: {
-      borderColor: 'rgba(15,23,42,0.10)',
+      borderColor: t.border,
       entireTextOnly: true,
       scaleMargins: { top: 0.1, bottom: 0.1 },
     },
     timeScale: {
-      borderColor: 'rgba(15,23,42,0.10)',
+      borderColor: t.border,
       rightOffset: 1,
       fixLeftEdge: true,
       lockVisibleTimeRangeOnResize: true,
@@ -133,12 +166,12 @@ function chartOptions(intraday) {
     crosshair: {
       mode: LWC.CrosshairMode.Normal,
       vertLine: {
-        color: 'rgba(15,23,42,0.35)', width: 1,
-        style: LWC.LineStyle.Dotted, labelBackgroundColor: '#334155',
+        color: t.crosshair, width: 1,
+        style: LWC.LineStyle.Dotted, labelBackgroundColor: t.crosshairLabel,
       },
       horzLine: {
-        color: 'rgba(15,23,42,0.35)', width: 1,
-        style: LWC.LineStyle.Dotted, labelBackgroundColor: '#334155',
+        color: t.crosshair, width: 1,
+        style: LWC.LineStyle.Dotted, labelBackgroundColor: t.crosshairLabel,
       },
     },
     /* 41 列頁面裡，圖表不能搶走滾輪 */
@@ -148,32 +181,35 @@ function chartOptions(intraday) {
 }
 
 function buildChart(el, bars, symbol, intraday) {
+  const t = theme();
   const chart = LWC.createChart(el, chartOptions(intraday));
 
   const candles = chart.addSeries(LWC.CandlestickSeries, {
-    upColor: UP, downColor: DOWN,
-    borderUpColor: UP, borderDownColor: DOWN,
-    wickUpColor: UP, wickDownColor: DOWN,
+    upColor: t.candle.up, downColor: t.candle.down,
+    borderUpColor: t.candle.up, borderDownColor: t.candle.down,
+    wickUpColor: t.candle.up, wickDownColor: t.candle.down,
     priceLineVisible: false,
   });
   candles.setData(bars);
 
-  const group = { el, chart, candles, bars, symbol, ma: new Map(), volume: null };
+  const group = { el, chart, candles, bars, symbol, ma: new Map(), volume: null, priceLines: [] };
 
   /* 52 週高低以日線為準，60 分 K 圖上當作水平參考 */
   const yearly = state.daily.get(symbol);
   if (yearly) {
     const { high, low } = yearRange(yearly);
-    for (const [price, color, title] of [
-      [high, '#64748b', '52週高'],
-      [low, '#94a3b8', '52週低'],
+    for (const [price, key, title] of [
+      [high, 'high', '52週高'],
+      [low, 'low', '52週低'],
     ]) {
-      if (Number.isFinite(price)) {
-        candles.createPriceLine({
-          price, color, title, lineWidth: 1,
+      if (!Number.isFinite(price)) continue;
+      group.priceLines.push({
+        key,
+        line: candles.createPriceLine({
+          price, color: t.range[key], title, lineWidth: 1,
           lineStyle: LWC.LineStyle.Dashed, axisLabelVisible: true,
-        });
-      }
+        }),
+      });
     }
   }
 
@@ -188,7 +224,7 @@ function syncMA(group) {
     const existing = group.ma.get(period);
     if (wanted && !existing) {
       const line = group.chart.addSeries(LWC.LineSeries, {
-        color: MA_COLORS[period], lineWidth: 1,
+        color: theme().ma[period], lineWidth: 1,
         priceLineVisible: false, lastValueVisible: false,
         crosshairMarkerVisible: false,
       });
@@ -408,10 +444,99 @@ function renderMAControls() {
 
     const swatch = document.createElement('span');
     swatch.className = 'swatch';
-    swatch.style.color = MA_COLORS[period];
+    swatch.style.color = theme().ma[period];
 
     label.append(input, swatch, document.createTextNode(`MA${period}`));
     host.append(label);
+  }
+}
+
+/* ---------- 主題 ---------- */
+
+function readStoredTheme() {
+  try {
+    const stored = localStorage.getItem(THEME_KEY);
+    if (stored && stored in THEMES) return stored;
+  } catch (err) {
+    /* 無痕模式會擋 localStorage，用預設值就好 */
+  }
+  return 'light';
+}
+
+/* 只更新既有圖表，不重建 —— 重建會讓 60 分 K 的狀態和捲動位置跑掉 */
+function applyThemeToCharts() {
+  const t = theme();
+
+  for (const panes of state.panes.values()) {
+    for (const group of Object.values(panes)) {
+      if (!group) continue;
+
+      group.chart.applyOptions({
+        layout: { textColor: t.chart.text },
+        grid: {
+          vertLines: { color: t.chart.grid },
+          horzLines: { color: t.chart.grid },
+        },
+        rightPriceScale: { borderColor: t.chart.border },
+        timeScale: { borderColor: t.chart.border },
+        crosshair: {
+          vertLine: { color: t.chart.crosshair, labelBackgroundColor: t.chart.crosshairLabel },
+          horzLine: { color: t.chart.crosshair, labelBackgroundColor: t.chart.crosshairLabel },
+        },
+      });
+
+      group.candles.applyOptions({
+        upColor: t.candle.up, downColor: t.candle.down,
+        borderUpColor: t.candle.up, borderDownColor: t.candle.down,
+        wickUpColor: t.candle.up, wickDownColor: t.candle.down,
+      });
+
+      for (const [period, series] of group.ma) {
+        series.applyOptions({ color: t.ma[period] });
+      }
+
+      for (const { key, line } of group.priceLines) {
+        line.applyOptions({ color: t.range[key] });
+      }
+
+      /* 成交量顏色綁在每一根資料上，換色要整份重設 */
+      if (group.volume) {
+        group.volume.setData(group.bars.map((bar) => ({
+          time: bar.time, value: bar.volume, color: volumeColor(bar, 0.45),
+        })));
+      }
+    }
+  }
+
+  /* 均線勾選鈕上的小圓點 */
+  document.querySelectorAll('#maControls label').forEach((label, index) => {
+    label.querySelector('.swatch').style.color = t.ma[MA_PERIODS[index]];
+  });
+}
+
+function setTheme(name) {
+  state.theme = name in THEMES ? name : 'light';
+  document.documentElement.dataset.theme = state.theme;
+  try {
+    localStorage.setItem(THEME_KEY, state.theme);
+  } catch (err) {
+    /* 記不住沒關係，這次切換仍然有效 */
+  }
+  for (const button of document.querySelectorAll('#themes button')) {
+    button.classList.toggle('on', button.dataset.theme === state.theme);
+  }
+  applyThemeToCharts();
+}
+
+function renderThemeControls() {
+  const host = document.getElementById('themes');
+  for (const [name, label] of THEMES_UI) {
+    const button = document.createElement('button');
+    button.dataset.theme = name;
+    button.textContent = label;
+    button.className = name === state.theme ? 'on' : '';
+    button.addEventListener('click', () => setTheme(name));
+    host.append(button);
   }
 }
 
@@ -475,6 +600,10 @@ function observeRows() {
 }
 
 async function boot() {
+  state.theme = readStoredTheme();
+  document.documentElement.dataset.theme = state.theme;
+
+  renderThemeControls();
   renderMAControls();
 
   let payload;
@@ -504,6 +633,7 @@ async function boot() {
 
   state.names = payload.names || {};
   state.order = payload.order;
+  document.title = `STOCK-K · ${payload.order.length} 檔 K 線`;
 
   const list = document.getElementById('list');
   const fragment = document.createDocumentFragment();

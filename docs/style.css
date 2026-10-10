@@ -1,17 +1,51 @@
 :root {
+  color-scheme: light;
+
   --bg: #ffffff;
   --stripe: #fbfcfd;
-  --panel: #f1f5f9;
   --panel-2: #eef2f7;
   --border: #e4e8ee;
   --text: #111721;
   --muted: #6b7480;
   --link: #2563eb;
-  /* 美式慣例：綠漲紅跌 */
   --up: #16a34a;
   --down: #dc2626;
+
+  --topbar-bg: rgba(255, 255, 255, 0.9);
+  --hover-border: #cfd6df;
+  --checked-border: #c3cbd6;
+  --active-bg: #1e293b;
+  --active-fg: #ffffff;
+  --badge-bg: rgba(217, 119, 6, 0.12);
+  --badge-fg: #b45309;
+  --warn: #b45309;
+
   --row-h: 294px;
   --sym-w: 132px;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #0a0c11;
+  --stripe: #0c0f16;
+  --panel-2: #161a24;
+  --border: #1e2430;
+  --text: #e6e9ef;
+  --muted: #7d8699;
+  --link: #60a5fa;
+  /* 美式慣例綠漲紅跌，深色底調亮一階 */
+  --up: #22c55e;
+  --down: #ef4444;
+
+  --topbar-bg: rgba(10, 12, 17, 0.88);
+  --hover-border: #2c3444;
+  --checked-border: #39414f;
+  --active-bg: #e6e9ef;
+  --active-fg: #0a0c11;
+  --badge-bg: rgba(240, 185, 11, 0.16);
+  --badge-fg: #f0b90b;
+  --warn: #f0b90b;
 }
 
 * { box-sizing: border-box; }
@@ -32,7 +66,7 @@ html, body {
   position: sticky;
   top: 0;
   z-index: 20;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--topbar-bg);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
 }
@@ -67,9 +101,9 @@ html, body {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-.meta .warn { color: #b45309; }
+.meta .warn { color: var(--warn); }
 
-/* button groups: 排序 / 均線 */
+/* button groups: 主題 / 排序 / 均線 */
 
 .group {
   display: flex;
@@ -92,12 +126,12 @@ html, body {
   transition: color 0.12s, border-color 0.12s, background 0.12s;
 }
 
-.group button:hover { color: var(--text); border-color: #cfd6df; }
+.group button:hover { color: var(--text); border-color: var(--hover-border); }
 
 .group button.on {
-  color: #ffffff;
-  background: #1e293b;
-  border-color: #1e293b;
+  color: var(--active-fg);
+  background: var(--active-bg);
+  border-color: var(--active-bg);
 }
 
 /* MA toggles are labels wrapping a hidden checkbox */
@@ -117,11 +151,11 @@ html, body {
   transition: color 0.12s, border-color 0.12s, background 0.12s;
 }
 
-.group label:hover { border-color: #cfd6df; }
+.group label:hover { border-color: var(--hover-border); }
 
 .group label:has(input:checked) {
   color: var(--text);
-  border-color: #c3cbd6;
+  border-color: var(--checked-border);
   background: var(--panel-2);
 }
 
@@ -225,12 +259,12 @@ main { padding-bottom: 40px; }
   transition: color 0.12s, border-color 0.12s, background 0.12s;
 }
 
-.vol-btn:hover { color: var(--text); border-color: #cfd6df; }
+.vol-btn:hover { color: var(--text); border-color: var(--hover-border); }
 
 .vol-btn.on {
-  color: #ffffff;
-  background: #1e293b;
-  border-color: #1e293b;
+  color: var(--active-fg);
+  background: var(--active-bg);
+  border-color: var(--active-bg);
 }
 
 /* chart panes */
@@ -279,7 +313,7 @@ main { padding-bottom: 40px; }
 .seg button:hover { color: var(--text); }
 .seg button.on {
   background: var(--panel-2);
-  border-color: #c3cbd6;
+  border-color: var(--checked-border);
   color: var(--text);
 }
 
@@ -287,8 +321,8 @@ main { padding-bottom: 40px; }
   margin-left: 6px;
   padding: 1px 6px;
   border-radius: 4px;
-  background: rgba(217, 119, 6, 0.12);
-  color: #b45309;
+  background: var(--badge-bg);
+  color: var(--badge-fg);
   font-size: 10px;
 }
 
@@ -318,5 +352,6 @@ main { padding-bottom: 40px; }
   .pane + .pane { border-left: 0; }
 
   .bar { padding: 8px 16px; }
+  .bar .meta { margin-left: 0; order: 3; }
   #maControls { margin-left: 0; }
 }
