@@ -85,7 +85,9 @@ function volumeColor(bar, alpha) {
 
 async function loadHourly(symbol) {
   if (!state.hourly.has(symbol)) {
-    const request = fetch(`data/hourly/${symbol}.json`)
+    /* no-cache：GitHub Pages 送 max-age=600，不重新驗證的話改完清單會看到
+       最多 10 分鐘前的舊資料 */
+    const request = fetch(`data/hourly/${symbol}.json`, { cache: 'no-cache' })
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(res.status))))
       .then((payload) => payload.bars.map(toBar))
       .catch(() => null);
@@ -618,7 +620,7 @@ async function boot() {
 
   let payload;
   try {
-    const res = await fetch('data/daily.json');
+    const res = await fetch('data/daily.json', { cache: 'no-cache' });
     if (!res.ok) throw new Error(res.status);
     payload = await res.json();
   } catch (err) {

@@ -69,6 +69,3 @@ NEE    新紀元能源
 VST    Vistra
 NRG    NRG Energy
 LUMN   Lumen
-
-# 後補
-
