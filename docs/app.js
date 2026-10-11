@@ -159,7 +159,6 @@ function chartOptions(intraday) {
       borderColor: t.border,
       rightOffset: 1,
       fixLeftEdge: true,
-      lockVisibleTimeRangeOnResize: true,
       timeVisible: intraday,
       secondsVisible: false,
     },
@@ -180,6 +179,13 @@ function chartOptions(intraday) {
   };
 }
 
+/* lightweight-charts 不會自動把所有資料塞進可視範圍 —— 預設只顯示最近 40 餘根，
+   所以一年 251 根只會看到約兩個月。每次設定資料後要自己指定範圍。
+   資料量真的太大時（期貨 60 分 K 有 1485 根）函式庫會自己停在下限。 */
+function showAllBars(chart, bars) {
+  chart.timeScale().setVisibleLogicalRange({ from: -0.5, to: bars.length - 0.5 });
+}
+
 function buildChart(el, bars, symbol, intraday) {
   const t = theme();
   const chart = LWC.createChart(el, chartOptions(intraday));
@@ -191,6 +197,10 @@ function buildChart(el, bars, symbol, intraday) {
     priceLineVisible: false,
   });
   candles.setData(bars);
+  showAllBars(chart, bars);
+  /* 容器尺寸一變就重設範圍。跨過桌機/手機斷點時 lightweight-charts 會把可視
+     範圍往右滑並在右邊留白，左圖就看不到完整一年。 */
+  chart.timeScale().subscribeSizeChange(() => showAllBars(chart, bars));
 
   const group = { el, chart, candles, bars, symbol, ma: new Map(), volume: null, priceLines: [] };
 
