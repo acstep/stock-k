@@ -326,9 +326,142 @@ main { padding-bottom: 40px; }
   font-size: 10px;
 }
 
+/* ---------- GEX 區塊 ---------- */
+
+.gex {
+  border-bottom: 1px solid var(--border);
+  padding: 14px 18px 16px;
+}
+
+.gex-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.gex-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.gex-sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  margin-left: 8px;
+}
+
+#gexScenarios { margin-left: auto; }
+
+.gex-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.stat {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 11px 8px;
+  background: var(--panel-2);
+}
+
+.stat .k {
+  display: block;
+  font-size: 10.5px;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+
+.stat .v {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+
+.stat .v small {
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.stat .v.up { color: var(--up); }
+.stat .v.down { color: var(--down); }
+.stat.warn { border-color: var(--badge-fg); }
+
+/* 上下堆疊而非並排：232 根履約價並排會讓每根只剩 2.8px，
+   加上半透明會淡到看不見。全寬時每根約 6px。 */
+.gex-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+.gex-pane {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  min-width: 0;
+}
+
+.gex-pane .cap,
+.gex-pane figcaption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 22px;
+  flex: none;
+  font-size: 10.5px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+/* flex: none 是必要的 —— 共用的 .chart 帶了 flex:1，在 column flex 容器裡
+   flex-basis:0 會蓋過 height，圖表會被壓成 0 高 */
+.gex-pane .chart { flex: none; height: 208px; }
+
+.gex-wide { margin-top: 14px; }
+.gex-wide .chart { flex: none; height: 268px; }
+
+#gexBucket { margin-left: auto; }
+
+.gex-note {
+  margin: 12px 0 0;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.gex-note b { color: var(--text); font-weight: 600; }
+.gex-note .warn { color: var(--warn); }
+
+.scenario-key {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  margin-right: 5px;
+  vertical-align: -1px;
+}
+
 /* ---------- responsive ---------- */
 
 @media (max-width: 940px) {
+  .gex { padding: 12px 16px 14px; }
+  #gexScenarios { margin-left: 0; width: 100%; }
+  .gex-grid { grid-template-columns: 1fr; }
+  .gex-pane .chart { height: 190px; }
+  .gex-wide .chart { height: 240px; }
+}
+
   .row {
     grid-template-columns: 1fr;
     grid-template-rows: auto;

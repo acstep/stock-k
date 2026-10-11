@@ -30,9 +30,46 @@
   </div>
 </header>
 
+<section class="gex" id="gex" hidden>
+  <div class="gex-bar">
+    <div class="gex-title">
+      SPX 選擇權 Gamma 曝險
+      <span class="gex-sub" id="gexSub"></span>
+    </div>
+    <div class="group" id="gexScenarios"><span class="label">造市商持倉情境</span></div>
+  </div>
+
+  <div class="gex-stats" id="gexStats"></div>
+
+  <div class="gex-grid">
+    <figure class="gex-pane">
+      <figcaption>各履約價 GEX · <span id="gexCap30d">30天內到期</span></figcaption>
+      <div class="chart" id="gexStrikes30d"></div>
+    </figure>
+    <figure class="gex-pane">
+      <figcaption>各履約價 GEX · <span id="gexCapAll">全部到期日</span></figcaption>
+      <div class="chart" id="gexStrikesAll"></div>
+    </figure>
+  </div>
+
+  <figure class="gex-pane gex-wide">
+    <figcaption>
+      淨 GEX 隨假設價格變化（與 0 的交點 = Gamma Flip）
+      <span class="seg" id="gexBucket">
+        <button data-bucket="30d" class="on">30天內</button>
+        <button data-bucket="all">全部到期日</button>
+      </span>
+    </figcaption>
+    <div class="chart" id="gexCurve"></div>
+  </figure>
+
+  <p class="gex-note" id="gexNote"></p>
+</section>
+
 <main id="list"></main>
 
 <script src="vendor/lightweight-charts.standalone.production.js"></script>
 <script src="app.js"></script>
+<script src="gex.js"></script>
 </body>
 </html>

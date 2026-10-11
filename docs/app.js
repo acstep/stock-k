@@ -538,6 +538,7 @@ function setTheme(name) {
     button.classList.toggle('on', button.dataset.theme === state.theme);
   }
   applyThemeToCharts();
+  document.dispatchEvent(new CustomEvent('themechange'));
 }
 
 function renderThemeControls() {
