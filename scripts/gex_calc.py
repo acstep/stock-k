@@ -30,6 +30,7 @@ from scipy.stats import norm
 CBOE_URL = "https://cdn.cboe.com/api/global/delayed_quotes/options/_SPX.json"
 ROOT = Path(__file__).resolve().parents[1]
 OUT_PATH = ROOT / "docs" / "data" / "gex.json"
+HISTORY_PATH = ROOT / "docs" / "data" / "gex-history.json"
 
 LOOKBACK = 0.15     # sweep spot +/-15% to find where net gamma crosses zero
 GRID_STEP = 5.0
@@ -143,6 +144,50 @@ def bs_gamma(spot, strike, T, sigma, carry):
     """Gamma does not depend on the drift, so no discount factor appears."""
     d1 = (np.log(spot / strike) + (carry + 0.5 * sigma * sigma) * T) / (sigma * np.sqrt(T))
     return norm.pdf(d1) / (spot * sigma * np.sqrt(T))
+
+
+def append_history(payload: dict) -> int:
+    """每個交易日存一列，六種情境的結果全部留著。
+
+    公開資料集都只發布單一權重（標準假設），所以「減半」那一類情境無從檢驗。
+    自己每天存一列，累積幾個月後就有資料可以驗了。
+    """
+    history = {"rows": []}
+    if HISTORY_PATH.exists():
+        try:
+            history = json.loads(HISTORY_PATH.read_text())
+        except json.JSONDecodeError:
+            pass
+
+    buckets = {}
+    for key, cov in payload["metrics"]["buckets"].items():
+        buckets[key] = {
+            "netGex": cov["netGex"],
+            "flip": cov["flip"],
+            "callWall": cov["callWall"],
+            "putWall": cov["putWall"],
+            "callWallOI": cov["callWallOI"],
+            "putWallOI": cov["putWallOI"],
+        }
+
+    row = {
+        "date": payload["session"]["valuation"],
+        "spot": payload["snapshot"]["spot"],
+        "sigma1d": payload["session"]["sigma1d"],
+        "carry": payload["session"]["carry"],
+        "buckets": buckets,
+    }
+
+    rows = [r for r in history.get("rows", []) if r.get("date") != row["date"]]
+    rows.append(row)
+    rows.sort(key=lambda r: r["date"])
+
+    HISTORY_PATH.write_text(json.dumps({
+        "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "note": "本站自行計算，每個交易日一列。六種造市商持倉假設都留著，用來檢驗哪一組站得住。",
+        "rows": rows,
+    }, separators=(",", ":"), ensure_ascii=False))
+    return len(rows)
 
 
 def main() -> int:
@@ -335,6 +380,7 @@ def main() -> int:
     if sigma1d:
         print(f"  1σ={sigma1d:.0f} 點 | 現價距 Flip（σ）={distances}")
     print(f"wrote {OUT_PATH.relative_to(ROOT)} ({OUT_PATH.stat().st_size / 1024:.0f} KB)")
+    print(f"history: {append_history(payload)} 天 ({HISTORY_PATH.name})")
     return 0
 
 

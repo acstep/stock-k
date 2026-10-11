@@ -27,7 +27,7 @@
   ];
 
   const state = {
-    data: null, peers: null, bucket: '30d', scenario: 'A',
+    data: null, peers: null, backtest: null, bucket: '30d', scenario: 'A',
     range: { from: null, to: null },          // null = 用預設（現價 ±2.5%）
     charts: [], curveChart: null,
   };
@@ -456,6 +456,46 @@
     }
   }
 
+  /* ---------- 回測 ---------- */
+
+  function renderBacktest() {
+    const bt = state.backtest;
+    const el = document.getElementById('gexBacktest');
+    if (!bt) {
+      el.innerHTML = '<span class="na">回測資料未取得</span>';
+      return;
+    }
+    const label = { positive: '正 gamma', negative: '負 gamma', neutral: '中性' };
+    const st = bt.signTest;
+    const w = bt.walls;
+    const pct = (v) => `${v.toFixed(3)}%`;
+
+    el.innerHTML =
+      `<div class="bt-meta">樣本 <b>${bt.window.days}</b> 個交易日（${bt.window.from} ~ ${bt.window.to}）`
+      + ` · 關卡用前一日收盤計算，無未來資訊 · 來源 <a href="${bt.source.url}" target="_blank" rel="noopener">${bt.source.name}</a>`
+      + ` <a href="${bt.source.licenseUrl}" target="_blank" rel="noopener">${bt.source.license}</a>，由本站分析</div>`
+      + '<table class="gex-peer bt-table"><thead><tr><th>Gamma 狀態</th><th>天數</th>'
+      + '<th>隔日振幅</th><th>前一日振幅</th><th>當日報酬</th></tr></thead><tbody>'
+      + bt.regime.map((g) => `<tr><td class="name">${label[g.key] || g.key}</td>`
+        + `<td>${g.days}</td><td>${pct(g.range)}</td><td class="asof">${pct(g.prevRange)}</td>`
+        + `<td>${g.ret > 0 ? '+' : ''}${pct(g.ret)}</td></tr>`).join('')
+      + '</tbody></table>'
+      + `<p class="bt-line">正 gamma 與負 gamma 的隔日振幅差 <b>${st.diff.toFixed(3)}%</b>，`
+      + `<b>p = ${st.p}</b> —— 不顯著。現價在 Flip 上方／下方的振幅差 p = ${bt.flipTest.p}，距離遠近與振幅的相關 ${bt.distanceTest.corr}（p = ${bt.distanceTest.p}），也都沒有。</p>`
+      + `<p class="bt-warn"><b>但「測不到」不等於「沒有」。</b>這個樣本要達到顯著，兩組振幅得差 <b>${st.needed.toFixed(3)}%</b>`
+      + `（基準的 ${Math.round(st.needed / bt.regime[0].range * 100)}%）。若真實差異是 0.3%，檢定力只有 <b>${Math.round((st.power['0.3'] || 0) * 100)}%</b> ——`
+      + `中等效果很容易被埋掉。加上只有 ${bt.regime.find((g) => g.key === 'negative')?.days ?? 0} 天是負 gamma，`
+      + `且現價距 Flip 的中位數只有 ${bt.medianDistToFlip}%，狀態本身長期貼在翻轉點上。</p>`
+      + `<p class="bt-line"><b>牆的表現：</b>Call Wall 觸及 ${w.callTouched} 天、守住 ${w.callHeld} 天；`
+      + `Put Wall <b>${w.putTouched} 天一次都沒觸及</b>（平均在現價下方 ${w.putDistAvg}%，這期間的跌勢根本沒到那裡）。</p>`
+      + `<p class="bt-line bt-concl">結論：這 ${bt.window.days} 天看不出 gamma 狀態與隔日波動的關係，`
+      + `但也沒有足夠樣本否定它。要真正分出「標準／反向／減半」哪一個對，需要數倍長的樣本，`
+      + `而且公開資料只有標準權重一種 —— 本站從今天起每天自己存一列六種情境的結果，累積中。</p>`;
+
+    document.getElementById('gexBtHead').textContent =
+      `回測 · Gamma 狀態有沒有預測力？（近 ${bt.window.days} 個交易日）`;
+  }
+
   /* ---------- 啟動 ---------- */
 
   async function boot() {
@@ -471,16 +511,19 @@
     state.data = data;
 
     /* 外站資料拿不到不影響本站的圖，只是那幾格顯示 — */
-    try {
-      const res = await fetch('data/gex-peers.json', { cache: 'no-cache' });
-      if (res.ok) state.peers = await res.json();
-    } catch (err) {
-      /* 略過，表格只會有本站那一列 */
+    for (const [file, key] of [['data/gex-peers.json', 'peers'], ['data/gex-backtest.json', 'backtest']]) {
+      try {
+        const res = await fetch(file, { cache: 'no-cache' });
+        if (res.ok) state[key] = await res.json();
+      } catch (err) {
+        /* 略過 */
+      }
     }
 
     renderControls();
     renderRangeControls();
     renderAll();
+    renderBacktest();
     document.getElementById('gex').hidden = false;
 
     document.addEventListener('themechange', renderAll);

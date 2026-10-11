@@ -514,6 +514,45 @@ main { padding-bottom: 40px; }
 
 .gex-peer-note b { color: var(--text); font-weight: 600; }
 
+/* 回測區塊 */
+
+.gex-bt {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.bt-meta {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.65;
+  margin-bottom: 8px;
+}
+
+.bt-meta a { color: var(--link); text-decoration: none; }
+.bt-meta a:hover { text-decoration: underline; }
+
+.bt-table { max-width: 640px; }
+
+.bt-line,
+.bt-warn {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  line-height: 1.75;
+  color: var(--muted);
+  max-width: 1000px;
+}
+
+.bt-line b,
+.bt-warn b { color: var(--text); font-weight: 600; }
+
+.bt-warn {
+  border-left: 2px solid var(--badge-fg);
+  padding-left: 10px;
+}
+
+.bt-concl { color: var(--text); }
+
 /* 履約價範圍控制 */
 
 .gex-rangebar {

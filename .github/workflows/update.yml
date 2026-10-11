@@ -46,6 +46,9 @@ jobs:
           FLASHALPHA_API_KEY: ${{ secrets.FLASHALPHA_API_KEY }}
         run: python scripts/gex_peers.py
 
+      - name: Mirror the open gamma dataset and run the backtest
+        run: python scripts/gex_backtest.py
+
       - name: Commit and push
         run: |
           git config user.name  "github-actions[bot]"
