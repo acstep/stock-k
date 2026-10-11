@@ -41,6 +41,20 @@
 
   <div class="gex-stats" id="gexStats"></div>
 
+  <div class="gex-section">
+    <div class="gex-section-head">外站參考（各站算法不同，看的是彼此的差距，不是哪個才對）</div>
+    <div class="gex-peer-wrap"><table class="gex-peer" id="gexPeerTable"></table></div>
+  </div>
+
+  <div class="gex-rangebar">
+    <span>履約價範圍</span>
+    <input type="number" id="gexFrom" step="5" inputmode="numeric">
+    <span class="dash">～</span>
+    <input type="number" id="gexTo" step="5" inputmode="numeric">
+    <button id="gexRangeReset">重設</button>
+    <span class="gex-rangeinfo" id="gexRangeInfo"></span>
+  </div>
+
   <div class="gex-grid">
     <figure class="gex-pane">
       <figcaption>各履約價 GEX · <span id="gexCap30d">30天內到期</span></figcaption>

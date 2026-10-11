@@ -33,7 +33,7 @@ OUT_PATH = ROOT / "docs" / "data" / "gex.json"
 
 LOOKBACK = 0.15     # sweep spot +/-15% to find where net gamma crosses zero
 GRID_STEP = 5.0
-STRIKE_BAND = 0.08  # strikes drawn in the bar panels
+STRIKE_BAND = 0.12  # strikes emitted for the bar panels; the page narrows this
 WALL_BAND = 0.12    # strikes considered when locating the walls
 TOP_N = 5           # strikes knocked out for the robustness check
 ATTEMPTS = 4

@@ -26,7 +26,11 @@
     { key: 'D', label: 'D 兩邊都多', note: '多 Call + 多 Put', wc: 1, wp: 1, color: '#16a34a' },
   ];
 
-  const state = { data: null, bucket: '30d', scenario: 'A', charts: [], curveChart: null };
+  const state = {
+    data: null, peers: null, bucket: '30d', scenario: 'A',
+    range: { from: null, to: null },          // null = 用預設（現價 ±2.5%）
+    charts: [], curveChart: null,
+  };
 
   const strikeToTime = (strike) => BASE + Math.round(strike / STRIKE_STEP) * DAY;
   const timeToStrike = (time) => Math.round((time - BASE) / DAY) * STRIKE_STEP;
@@ -96,6 +100,31 @@
 
   const strikeTickFormatter = (time) => String(timeToStrike(time));
 
+  /* 履約價範圍。資料本身帶 ±12%，預設只顯示現價 ±2.5% —— 一年份的 GEX 幾乎都擠在
+     現價附近，全畫出來旁邊那些沒數字的履約價只是把長條壓扁。 */
+  function strikeBounds() {
+    const all = state.data.panels['30d'].strikes;
+    return { lo: all[0][0], hi: all[all.length - 1][0] };
+  }
+
+  function defaultRange() {
+    const spot = state.data.snapshot.spot;
+    const step = STRIKE_STEP;
+    return {
+      from: Math.round(spot * 0.975 / step) * step,
+      to: Math.round(spot * 1.025 / step) * step,
+    };
+  }
+
+  function strikeRange() {
+    const { lo, hi } = strikeBounds();
+    const fallback = defaultRange();
+    const clamp = (v, d) => Math.max(lo, Math.min(hi, Math.round((v ?? d) / STRIKE_STEP) * STRIKE_STEP));
+    const a = clamp(state.range.from, fallback.from);
+    const b = clamp(state.range.to, fallback.to);
+    return { from: Math.min(a, b), to: Math.max(a, b), lo, hi };
+  }
+
   /* ---------- 各履約價 GEX ---------- */
 
   function buildStrikeChart(el, panel, spot, p, s) {
@@ -107,7 +136,8 @@
       },
     }));
 
-    const data = panel.strikes;
+    const bounds = strikeRange();
+    const data = panel.strikes.filter(([k]) => k >= bounds.from && k <= bounds.to);
     const colorOf = (value) => (value >= 0 ? p.up : p.down);
     const point = (k, value) => ({ time: strikeToTime(k), value, color: colorOf(value) });
 
@@ -271,6 +301,45 @@
       + ` · 基準 ${session.valuation} 開盤 · 月選到期 ${session.opex} · carry ${(session.carry * 100).toFixed(2)}%`;
   }
 
+  /* ---------- 外站參考 ---------- */
+
+  function renderPeers() {
+    const { metrics, session } = state.data;
+    const s = scenarioOf(state.scenario);
+    const bucket = metrics.buckets[state.bucket];
+
+    const dash = '<span class="na">—</span>';
+    const px = (v, d = 0) => (v === null || v === undefined ? dash
+      : Number(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }));
+    const gex = (v) => (v === null || v === undefined ? dash : `${v > 0 ? '+' : ''}${Number(v).toFixed(2)}B`);
+
+    /* Wall 的位置與情境無關，只有正負號跟著權重走（同 renderStats） */
+    const callWall = bucket.callWall ? bucket.callWall[0] : null;
+    const putWall = bucket.putWall ? bucket.putWall[0] : null;
+
+    const rows = [
+      '<thead><tr><th>來源</th><th>Zero Gamma</th><th>Call Wall</th><th>Put Wall</th>'
+      + '<th>淨 GEX</th><th>資料日</th></tr></thead><tbody>',
+      `<tr class="mine"><td class="name">本站 · 情境 ${s.key}</td>`
+      + `<td>${px(bucket.flip[s.key], 2)}</td><td>${px(callWall)}</td><td>${px(putWall)}</td>`
+      + `<td>${gex(bucket.netGex[s.key])}</td><td class="asof">${session.valuation}</td></tr>`,
+    ];
+
+    for (const peer of (state.peers && state.peers.peers) || []) {
+      const label = `<a href="${peer.url}" target="_blank" rel="noopener">${peer.name}</a>`;
+      if (peer.ok) {
+        rows.push(`<tr><td class="name">${label}</td>`
+          + `<td>${px(peer.zeroGamma, 2)}</td><td>${px(peer.callWall)}</td><td>${px(peer.putWall)}</td>`
+          + `<td>${gex(peer.netGex)}</td><td class="asof">${peer.asOf || '—'}</td></tr>`);
+      } else {
+        rows.push(`<tr><td class="name">${label}</td><td>${dash}</td><td>${dash}</td><td>${dash}</td>`
+          + `<td>${dash}</td><td class="note">抓取失敗</td></tr>`);
+      }
+    }
+    rows.push('</tbody>');
+    document.getElementById('gexPeerTable').innerHTML = rows.join('');
+  }
+
   /* ---------- 重畫 ---------- */
 
   function dropCharts() {
@@ -299,7 +368,41 @@
 
   function renderAll() {
     renderStats();
+    renderPeers();
+    renderRangeBar();
     renderCharts();
+  }
+
+  function renderRangeBar() {
+    const r = strikeRange();
+    document.getElementById('gexFrom').value = r.from;
+    document.getElementById('gexTo').value = r.to;
+    const shown = state.data.panels['30d'].strikes.filter(([k]) => k >= r.from && k <= r.to).length;
+    document.getElementById('gexRangeInfo').textContent =
+      `共 ${shown} 個履約價 · 資料涵蓋 ${r.lo.toLocaleString()}～${r.hi.toLocaleString()}`;
+  }
+
+  function renderRangeControls() {
+    const apply = () => {
+      const from = parseFloat(document.getElementById('gexFrom').value);
+      const to = parseFloat(document.getElementById('gexTo').value);
+      state.range.from = Number.isFinite(from) ? from : null;
+      state.range.to = Number.isFinite(to) ? to : null;
+      renderRangeBar();
+      renderCharts();
+    };
+    for (const id of ['gexFrom', 'gexTo']) {
+      const input = document.getElementById(id);
+      input.addEventListener('change', apply);
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') { event.preventDefault(); apply(); }
+      });
+    }
+    document.getElementById('gexRangeReset').addEventListener('click', () => {
+      state.range = { from: null, to: null };
+      renderRangeBar();
+      renderCharts();
+    });
   }
 
   /* ---------- 控件 ---------- */
@@ -345,9 +448,18 @@
       return;   // 沒有 GEX 資料就整塊不顯示，股票清單照常運作
     }
     if (!data.ok || !data.metrics) return;
-
     state.data = data;
+
+    /* 外站資料拿不到不影響本站的圖，只是那幾格顯示 — */
+    try {
+      const res = await fetch('data/gex-peers.json', { cache: 'no-cache' });
+      if (res.ok) state.peers = await res.json();
+    } catch (err) {
+      /* 略過，表格只會有本站那一列 */
+    }
+
     renderControls();
+    renderRangeControls();
     renderAll();
     document.getElementById('gex').hidden = false;
 

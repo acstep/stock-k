@@ -41,6 +41,11 @@ jobs:
       - name: Fetch SPX gamma exposure
         run: python scripts/gex_calc.py
 
+      - name: Fetch third-party gamma levels
+        env:
+          FLASHALPHA_API_KEY: ${{ secrets.FLASHALPHA_API_KEY }}
+        run: python scripts/gex_peers.py
+
       - name: Commit and push
         run: |
           git config user.name  "github-actions[bot]"

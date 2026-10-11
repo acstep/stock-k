@@ -452,6 +452,102 @@ main { padding-bottom: 40px; }
   vertical-align: -1px;
 }
 
+/* 外站參考表 */
+
+.gex-section { margin-bottom: 14px; }
+
+.gex-section-head {
+  font-size: 10.5px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.gex-peer-wrap { overflow-x: auto; }
+
+.gex-peer {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.gex-peer th,
+.gex-peer td {
+  padding: 6px 10px;
+  text-align: right;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.gex-peer th:first-child,
+.gex-peer td:first-child { text-align: left; }
+
+.gex-peer thead th {
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--muted);
+  border-bottom-color: var(--checked-border);
+}
+
+.gex-peer td { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.gex-peer td.name { font-family: inherit; }
+
+.gex-peer tr.mine td {
+  background: var(--panel-2);
+  font-weight: 600;
+}
+
+.gex-peer a { color: var(--link); text-decoration: none; }
+.gex-peer a:hover { text-decoration: underline; }
+
+.gex-peer .na { color: var(--muted); }
+.gex-peer .note { font-family: inherit; font-size: 10.5px; color: var(--badge-fg); }
+.gex-peer .asof { font-family: inherit; font-size: 10.5px; color: var(--muted); }
+
+/* 履約價範圍控制 */
+
+.gex-rangebar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.gex-rangebar .dash { color: var(--muted); }
+
+.gex-rangebar input {
+  width: 78px;
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.gex-rangebar input:focus { outline: none; border-color: var(--checked-border); }
+
+.gex-rangebar button {
+  padding: 4px 11px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+}
+
+.gex-rangebar button:hover { color: var(--text); border-color: var(--hover-border); }
+
+.gex-rangeinfo { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
 /* ---------- responsive ---------- */
 
 @media (max-width: 940px) {
