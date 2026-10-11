@@ -3,8 +3,10 @@
 /* SPX Gamma 曝險區塊。
  *
  * lightweight-charts 的橫軸是時間軸，但下面兩張圖的橫軸是「履約價」。做法是把
- * 履約價單調映射成時間戳（每 5 點 = 1 天），再用 tickMarkFormatter 與
- * timeFormatter 把標籤顯示回履約價。這樣十字準線、軸標籤都能直接用。
+ * 履約價單調映射成時間戳（每 5 點 = 1 天），再用 tickFormatter 把標籤顯示回履約價。
+ *
+ * 造市商持倉無法觀察，所以六種情境是「假設」。情境鈕是單選，選中的那一個會套用到
+ * 整區 —— 兩張長條圖、數字磚、曲線圖全部跟著換，按下去馬上看得到差別。
  */
 (() => {
   const LWC = LightweightCharts;
@@ -13,21 +15,23 @@
   const STRIKE_STEP = 5;
   const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 
-  /* 造市商持倉無法觀察。這裡只讓你看結論對假設有多敏感 —— 權重是任意的，
-     所以畫面上報的是「區間」而不是單一數字。 */
+  /* wc / wp 是 Call 與 Put 的權重，只有正負號有意義，倍數是任意的。
+     資料裡的 call / put 是未加權的絕對值，權重在這裡才套上去。 */
   const SCENARIOS = [
-    { key: 'A', label: 'A 標準', wc: 1, wp: -1, color: '#2563eb', width: 2, on: true },
-    { key: 'B', label: 'B 反向', wc: -1, wp: 1, color: '#2563eb', width: 1, on: true, dashed: true },
-    { key: 'E', label: 'E 空Put減半', wc: 1, wp: -0.5, color: '#7c3aed', width: 2, on: true },
-    { key: 'F', label: 'F 多Call減半', wc: 0.5, wp: -1, color: '#0891b2', width: 2, on: true },
-    { key: 'C', label: 'C 空Call空Put', wc: -1, wp: -1, color: '#ea580c', width: 1, on: false },
-    { key: 'D', label: 'D 多Call多Put', wc: 1, wp: 1, color: '#16a34a', width: 1, on: false },
+    { key: 'A', label: 'A 標準', note: '造市商多 Call、空 Put', wc: 1, wp: -1, color: '#2563eb' },
+    { key: 'B', label: 'B 反向', note: '造市商空 Call、多 Put', wc: -1, wp: 1, color: '#60a5fa' },
+    { key: 'E', label: 'E 空Put減半', note: '多 Call、空 Put 減半', wc: 1, wp: -0.5, color: '#7c3aed' },
+    { key: 'F', label: 'F 多Call減半', note: '多 Call 減半、空 Put', wc: 0.5, wp: -1, color: '#0891b2' },
+    { key: 'C', label: 'C 兩邊都空', note: '空 Call + 空 Put', wc: -1, wp: -1, color: '#ea580c' },
+    { key: 'D', label: 'D 兩邊都多', note: '多 Call + 多 Put', wc: 1, wp: 1, color: '#16a34a' },
   ];
 
-  const state = { data: null, bucket: '30d', charts: [], visible: new Set(SCENARIOS.filter((s) => s.on).map((s) => s.key)) };
+  const state = { data: null, bucket: '30d', scenario: 'A', charts: [], curveChart: null };
 
   const strikeToTime = (strike) => BASE + Math.round(strike / STRIKE_STEP) * DAY;
   const timeToStrike = (time) => Math.round((time - BASE) / DAY) * STRIKE_STEP;
+  const scenarioOf = (key) => SCENARIOS.find((s) => s.key === key) || SCENARIOS[0];
+  const roundOr = (v, d) => (v === null || v === undefined ? null : Math.round(v * 10 ** d) / 10 ** d);
 
   function palette() {
     const cs = getComputedStyle(document.documentElement);
@@ -45,10 +49,7 @@
         background: { type: LWC.ColorType.Solid, color: 'rgba(0,0,0,0)' },
         textColor: p.muted, fontSize: 10, fontFamily: MONO,
       },
-      grid: {
-        vertLines: { color: p.border },
-        horzLines: { color: p.border },
-      },
+      grid: { vertLines: { color: p.border }, horzLines: { color: p.border } },
       rightPriceScale: { borderColor: p.border, scaleMargins: { top: 0.12, bottom: 0.12 } },
       timeScale: { borderColor: p.border, fixLeftEdge: true, lockVisibleTimeRangeOnResize: true },
       crosshair: {
@@ -56,17 +57,14 @@
         vertLine: { color: p.muted, width: 1, style: LWC.LineStyle.Dotted, labelBackgroundColor: p.text },
         horzLine: { color: p.muted, width: 1, style: LWC.LineStyle.Dotted, labelBackgroundColor: p.text },
       },
-      /* 這一頁是拿來捲動的，圖表不能搶走滾輪 */
-      handleScroll: false,
+      handleScroll: false,   // 這一頁是拿來捲動的，圖表不能搶走滾輪
       handleScale: false,
     }, extra);
   }
 
   /* 圖表建立時 autoSize 還沒排好版，此時指定範圍會被覆蓋掉（範圍變成錯的，
-     K 棒細到看不見），所以尺寸一變就重設一次。
-     另外，分頁若是在背景開啟，ResizeObserver 的回呼不會執行（它跟
-     requestAnimationFrame 一樣屬於渲染階段），圖表會停在沒尺寸的狀態，
-     因此分頁一變成可見就再套一次。 */
+     長條細到看不見），所以尺寸一變就重設。分頁若在背景開啟，ResizeObserver
+     的回呼不會執行，圖表會停在沒尺寸的狀態，因此分頁一可見就再套一次。 */
   const fitters = [];
 
   function dropFitter(chart) {
@@ -100,7 +98,7 @@
 
   /* ---------- 各履約價 GEX ---------- */
 
-  function buildStrikeChart(el, panel, spot, p) {
+  function buildStrikeChart(el, panel, spot, p, s) {
     const chart = LWC.createChart(el, baseOptions(p, {
       localization: { timeFormatter: strikeTickFormatter },
       timeScale: {
@@ -110,24 +108,24 @@
     }));
 
     const data = panel.strikes;
+    const colorOf = (value) => (value >= 0 ? p.up : p.down);
+    const point = (k, value) => ({ time: strikeToTime(k), value, color: colorOf(value) });
 
     const callSeries = chart.addSeries(LWC.HistogramSeries, {
-      priceFormat: { type: 'volume' }, priceLineVisible: false, lastValueVisible: false,
-      base: 0,
+      priceFormat: { type: 'volume' }, priceLineVisible: false, lastValueVisible: false, base: 0,
     });
-    callSeries.setData(data.map(([k, call]) => ({ time: strikeToTime(k), value: call, color: p.up })));
+    callSeries.setData(data.map(([k, call]) => point(k, s.wc * call)));
 
     const putSeries = chart.addSeries(LWC.HistogramSeries, {
-      priceFormat: { type: 'volume' }, priceLineVisible: false, lastValueVisible: false,
-      base: 0,
+      priceFormat: { type: 'volume' }, priceLineVisible: false, lastValueVisible: false, base: 0,
     });
-    putSeries.setData(data.map(([k, , put]) => ({ time: strikeToTime(k), value: put, color: p.down })));
+    putSeries.setData(data.map(([k, , put]) => point(k, s.wp * put)));
 
     const netSeries = chart.addSeries(LWC.LineSeries, {
       color: p.text, lineWidth: 1, priceLineVisible: false, lastValueVisible: false,
       crosshairMarkerVisible: false,
     });
-    netSeries.setData(data.map(([k, , , net]) => ({ time: strikeToTime(k), value: net })));
+    netSeries.setData(data.map(([k, call, put]) => ({ time: strikeToTime(k), value: s.wc * call + s.wp * put })));
 
     LWC.createSeriesMarkers(netSeries, [{
       time: strikeToTime(Math.round(spot / STRIKE_STEP) * STRIKE_STEP),
@@ -140,9 +138,7 @@
 
   /* ---------- 淨 GEX 曲線 ---------- */
 
-  function curveValue(curve, i, wc, wp) {
-    return wc * curve.call[i] + wp * curve.put[i];
-  }
+  const netAt = (curve, i, s) => s.wc * curve.call[i] + s.wp * curve.put[i];
 
   function crossings(net, prices) {
     const out = [];
@@ -160,55 +156,59 @@
     const { prices, ...byBucket } = state.data.curve;
     const curve = byBucket[state.bucket];
     const spot = state.data.snapshot.spot;
+    const active = scenarioOf(state.scenario);
 
     const chart = LWC.createChart(el, baseOptions(p, {
-      timeScale: {
-        borderColor: p.border, fixLeftEdge: true, lockVisibleTimeRangeOnResize: true, timeVisible: false,
-      },
+      timeScale: { borderColor: p.border, fixLeftEdge: true, lockVisibleTimeRangeOnResize: true, timeVisible: false },
     }));
 
-    /* 橫軸一樣是「假設價格」，只是這裡本來就是價格，所以不需要轉換 */
-    const series = new Map();
+    /* 橫軸本來就是價格，不需要轉換 */
+    const priceFormatter = (time) =>
+      Math.round(prices[0] + ((time - BASE) / DAY) * (prices[1] - prices[0])).toLocaleString();
+
+    /* 六種情境全畫；選中的那一條加粗，其餘淡化當參考 */
+    const lines = [];
     for (const s of SCENARIOS) {
+      const on = s.key === active.key;
       const line = chart.addSeries(LWC.LineSeries, {
-        color: s.color, lineWidth: s.width,
-        lineStyle: s.dashed ? LWC.LineStyle.Dashed : LWC.LineStyle.Solid,
+        color: on ? s.color : s.color + '80',
+        lineWidth: on ? 2 : 1,
         priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
-        visible: state.visible.has(s.key),
       });
-      line.setData(prices.map((price, i) => ({ time: BASE + i * DAY, value: curveValue(curve, i, s.wc, s.wp) })));
-      line.createPriceLine({ price: 0, color: p.muted, lineWidth: 1, lineStyle: LWC.LineStyle.Solid, axisLabelVisible: false, title: '' });
-      series.set(s.key, line);
+      line.setData(prices.map((price, i) => ({ time: BASE + i * DAY, value: netAt(curve, i, s) })));
+      line.createPriceLine({
+        price: 0, color: p.muted, lineWidth: 1, lineStyle: LWC.LineStyle.Solid,
+        axisLabelVisible: false, title: '',
+      });
+      lines.push(line);
     }
 
-    /* 標準假設的 Flip 位置標出來，省去用眼睛找穿零點 */
-    const standard = SCENARIOS[0];
-    const net = prices.map((_, i) => curveValue(curve, i, standard.wc, standard.wp));
+    /* 把選中情境的穿零點標出來，省去用眼睛找 */
+    const net = prices.map((_, i) => netAt(curve, i, active));
     const marks = crossings(net, prices).map((price) => {
       const idx = Math.max(0, Math.min(prices.length - 1, Math.round((price - prices[0]) / (prices[1] - prices[0]))));
-      return { time: BASE + idx * DAY, position: 'belowBar', color: standard.color, shape: 'circle', text: `Flip ${Math.round(price).toLocaleString()}` };
+      return { time: BASE + idx * DAY, position: 'belowBar', color: active.color, shape: 'circle',
+               text: `Flip ${Math.round(price).toLocaleString()}` };
     });
-    LWC.createSeriesMarkers(series.get('A'), [...marks, {
+    marks.push({
       time: BASE + Math.round((spot - prices[0]) / (prices[1] - prices[0])) * DAY,
       position: 'aboveBar', color: p.text, shape: 'arrowDown', text: `現價 ${spot.toFixed(0)}`,
-    }]);
-
-    fitAll(chart, prices.length);
-
-    /* 橫軸刻度要顯示價格，不是日期 */
-    chart.timeScale().applyOptions({
-      tickMarkFormatter: (time) => Math.round(prices[0] + ((time - BASE) / DAY) * (prices[1] - prices[0])).toLocaleString(),
     });
+    LWC.createSeriesMarkers(lines[SCENARIOS.findIndex((x) => x.key === active.key)], marks);
+
     chart.applyOptions({
-      localization: {
-        timeFormatter: (time) => Math.round(prices[0] + ((time - BASE) / DAY) * (prices[1] - prices[0])).toLocaleString(),
+      localization: { timeFormatter: priceFormatter },
+      timeScale: {
+        borderColor: p.border, fixLeftEdge: true, lockVisibleTimeRangeOnResize: true, timeVisible: false,
+        tickMarkFormatter: priceFormatter,
       },
     });
 
-    return { chart, series };
+    fitAll(chart, prices.length);
+    return chart;
   }
 
-  /* ---------- 統計磚 ---------- */
+  /* ---------- 數字磚 ---------- */
 
   function tile(label, value, extra, cls) {
     return `<div class="stat"><span class="k">${label}</span>`
@@ -216,117 +216,121 @@
   }
 
   function renderStats() {
-    const { metrics, snapshot, session, updated } = state.data;
-    const m = metrics.buckets;
+    const { metrics, snapshot, session } = state.data;
+    const s = scenarioOf(state.scenario);
+    const bucket = metrics.buckets[state.bucket];
     const fmt = (v) => (v === null || v === undefined ? '—' : Math.round(v).toLocaleString());
     const signed = (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)}B`;
 
-    const flips = Object.values(metrics.flipStandard).filter((v) => v !== null);
-    const flipLow = Math.min(...flips);
-    const flipHigh = Math.max(...flips);
-    const sigmas = Object.values(metrics.sigmaDistance);
+    const flip = bucket.flip[s.key];
+    const flipTrim = bucket.flipExTop5[s.key];
+    const sigma = flip === null ? null : (snapshot.spot - flip) / session.sigma1d;
 
-    const sec = m['30d'];
-    const all = m.all;
-    const tiles = [
+    /* Wall 的位置與情境無關（取絕對值最大的履約價），只有正負號跟著權重走。
+       Python 存的 put 值是負的（空 Put），所以換算時要再乘一次 wp。 */
+    const callWall = bucket.callWall ? [bucket.callWall[0], s.wc * bucket.callWall[1]] : null;
+    const putWall = bucket.putWall ? [bucket.putWall[0], -s.wp * bucket.putWall[1]] : null;
+
+    document.getElementById('gexStats').innerHTML = [
+      tile('套用情境', `${s.key}　${s.note.split('、')[0]}`, '', ''),
       tile('現價', snapshot.spot.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-        `iv30 ${snapshot.iv30}%`, null),
-      tile('Gamma Flip（標準假設）', flips.length > 1 ? `${fmt(flipLow)} – ${fmt(flipHigh)}` : fmt(flips[0]),
-        sigmas.length ? `現價高於 ${Math.min(...sigmas).toFixed(1)}–${Math.max(...sigmas).toFixed(1)}σ` : '', null),
-      tile('淨 GEX · 30天內', signed(sec.netGex.A), '十億美元 / 1%', sec.netGex.A > 0 ? 'up' : 'down'),
-      tile('淨 GEX · 全部', signed(all.netGex.A), '十億美元 / 1%', all.netGex.A > 0 ? 'up' : 'down'),
-      tile('Call Wall（價外）', sec.callWall ? fmt(sec.callWall[0]) : '—', sec.callWall ? `${sec.callWall[1].toFixed(1)}B` : '', null),
-      tile('Put Wall（價外）', sec.putWall ? fmt(sec.putWall[0]) : '—', sec.putWall ? `${sec.putWall[1].toFixed(1)}B` : '', null),
-      tile('Gamma 集中度', `${(sec.concentration.topShare * 100).toFixed(0)}%`,
-        `前5大履約價占 30天內 |GEX|`, null),
-      tile('扣掉前5大後的 Flip', fmt(sec.flipExTop5.A),
-        `原為 ${fmt(sec.flip.A)}`, null),
-    ];
+        `iv30 ${snapshot.iv30}%　1σ ≈ ${session.sigma1d} 點`, ''),
+      tile('Gamma Flip', fmt(flip),
+        sigma === null ? '沒有穿零點' : `現價高於 ${sigma.toFixed(1)}σ`, ''),
+      tile(`淨 GEX · ${bucket.title}`, signed(bucket.netGex[s.key]), '十億美元 / 1%',
+        bucket.netGex[s.key] > 0 ? 'up' : 'down'),
+      tile('Call Wall（價外）', callWall ? fmt(callWall[0]) : '—',
+        callWall ? `${callWall[1].toFixed(1)}B` : '', ''),
+      tile('Put Wall（價外）', putWall ? fmt(putWall[0]) : '—',
+        putWall ? `${putWall[1].toFixed(1)}B` : '', ''),
+      tile('扣掉前5大後的 Flip', fmt(flipTrim),
+        flipTrim === null || flip === null ? '' : `原為 ${fmt(flip)}`, ''),
+      tile('Gamma 集中度', `${(bucket.concentration.topShare * 100).toFixed(0)}%`,
+        '前5大履約價占比', ''),
+    ].join('');
 
-    const box = document.getElementById('gexStats');
-    box.innerHTML = tiles.join('');
-
-    const top = sec.concentration.strikes.slice(0, 3)
+    const top = bucket.concentration.strikes.slice(0, 3)
       .map(([k, v]) => `${Math.round(k).toLocaleString()} (${v.toFixed(1)}B)`).join('、');
+    const dist = sigma === null ? '' :
+      `，現價高出 ${Math.abs(sigma).toFixed(1)} 個單日標準差（1σ ≈ ${session.sigma1d} 點），`
+      + `意思是<b>一個普通交易日的波動就能讓現價穿過它</b>，「正 Gamma 區所以波動被壓抑」這個說法並不牢靠。`;
 
     document.getElementById('gexNote').innerHTML =
-      `<b>怎麼讀：</b>造市商持倉無法觀察，整張圖都建立在假設上 —— 切換情境鈕看的是<b>範圍</b>，不是哪一條才對。`
-      + `標準假設下 30 天內的 Gamma Flip 是 ${fmt(sec.flip.A)}，現價只高出 ${Math.max(...sigmas).toFixed(1)} 個單日標準差（1σ ≈ ${session.sigma1d} 點），`
-      + `意思是<b>一個普通交易日的跌幅就會把它跌破</b>，「在正 Gamma 區所以波動被壓抑」這個說法並不牢靠。`
-      + `30 天內 |GEX| 有 ${(sec.concentration.topShare * 100).toFixed(0)}% 集中在 5 個履約價上（${top}），`
-      + `但扣掉這 5 個之後 Flip 只移動 ${Math.abs(sec.flipExTop5.A - sec.flip.A).toFixed(0)} 點，所以位置本身是穩的。`
-      + `<br><b>限制：</b>未平倉量是前一交易日結算的數字，不含盤中新增的部位；情境的權重是任意的；`
-      + `沒有回測，所以無法證明這些價位過去有預測力。資料為 ${snapshot.timestamp} 的快照，計算基準 ${session.valuation} 開盤。`
-      + `這<b>不是買賣建議</b>。`;
+      `<b>怎麼讀：</b>造市商持倉無法觀察，整張圖建立在假設上 —— 按上面的情境鈕切換，`
+      + `看的是<b>不同假設下結論差多少</b>，而不是哪一條才對。`
+      + `目前 <b>情境 ${s.key}（${s.note}）</b>下，${bucket.title}的 Gamma Flip `
+      + (flip === null ? '不存在（淨 GEX 沒有穿過 0）' : `是 ${fmt(flip)}`) + dist
+      + `30 天內 |GEX| 有 ${(metrics.buckets['30d'].concentration.topShare * 100).toFixed(0)}% 集中在 5 個履約價上（${top}），`
+      + `但扣掉這 5 個之後 Flip 只移動 ${Math.abs(metrics.buckets['30d'].flipExTop5.A - metrics.buckets['30d'].flip.A).toFixed(0)} 點，所以位置本身是穩的。`
+      + `<br><b>限制：</b>未平倉量是前一交易日結算的數字，不含盤中新增部位；情境的權重是任意的（只有正負號有意義）；`
+      + `沒有回測，無法證明這些價位過去有預測力。快照 ${snapshot.timestamp}，計算基準 ${session.valuation} 開盤。`
+      + `<b>這不是買賣建議。</b>`;
 
     document.getElementById('gexSub').textContent =
       `${snapshot.contracts.toLocaleString()} / ${snapshot.contractsTotal.toLocaleString()} 個合約有 OI 與 IV`
-      + ` · 基準 ${session.valuation} 開盤 · 月選到期 ${session.opex}`
-      + ` · carry ${(session.carry * 100).toFixed(2)}%`;
+      + ` · 基準 ${session.valuation} 開盤 · 月選到期 ${session.opex} · carry ${(session.carry * 100).toFixed(2)}%`;
+  }
+
+  /* ---------- 重畫 ---------- */
+
+  function dropCharts() {
+    fitters.length = 0;
+    for (const chart of state.charts) chart.remove();
+    if (state.curveChart) state.curveChart.remove();
+    state.charts = [];
+    state.curveChart = null;
+  }
+
+  function renderCharts() {
+    dropCharts();
+    const p = palette();
+    const s = scenarioOf(state.scenario);
+    const { panels, snapshot } = state.data;
+
+    state.charts = [
+      buildStrikeChart(document.getElementById('gexStrikes30d'), panels['30d'], snapshot.spot, p, s),
+      buildStrikeChart(document.getElementById('gexStrikesAll'), panels.all, snapshot.spot, p, s),
+    ];
+    state.curveChart = buildCurveChart(document.getElementById('gexCurve'), p);
+
+    document.getElementById('gexCap30d').textContent = `${panels['30d'].title} · 情境 ${s.key}`;
+    document.getElementById('gexCapAll').textContent = `${panels.all.title} · 情境 ${s.key}`;
+  }
+
+  function renderAll() {
+    renderStats();
+    renderCharts();
   }
 
   /* ---------- 控件 ---------- */
 
-  function renderScenarioControls() {
+  function renderControls() {
     const host = document.getElementById('gexScenarios');
     for (const s of SCENARIOS) {
       const btn = document.createElement('button');
       btn.dataset.key = s.key;
-      btn.className = state.visible.has(s.key) ? 'on' : '';
+      btn.title = s.note;
+      btn.className = s.key === state.scenario ? 'on' : '';
       btn.innerHTML = `<span class="scenario-key" style="background:${s.color}"></span>${s.label}`;
       btn.addEventListener('click', () => {
-        if (state.visible.has(s.key)) state.visible.delete(s.key);
-        else state.visible.add(s.key);
-        btn.classList.toggle('on');
-        for (const [key, series] of state.curveSeries) {
-          series.applyOptions({ visible: state.visible.has(key) });
+        state.scenario = s.key;
+        for (const other of host.querySelectorAll('button')) {
+          other.classList.toggle('on', other.dataset.key === state.scenario);
         }
+        renderAll();
       });
       host.append(btn);
     }
-  }
 
-  function rebuildCurve() {
-    if (state.curveChart) {
-      dropFitter(state.curveChart);
-      state.curveChart.remove();
-    }
-    const el = document.getElementById('gexCurve');
-    const built = buildCurveChart(el, palette());
-    state.curveChart = built.chart;
-    state.curveSeries = built.series;
-  }
-
-  function renderBucketControls() {
     for (const btn of document.querySelectorAll('#gexBucket button')) {
-      btn.classList.toggle('on', btn.dataset.bucket === state.bucket);
       btn.addEventListener('click', () => {
         state.bucket = btn.dataset.bucket;
         for (const other of document.querySelectorAll('#gexBucket button')) {
           other.classList.toggle('on', other.dataset.bucket === state.bucket);
         }
-        rebuildCurve();
+        renderAll();
       });
     }
-  }
-
-  /* ---------- 主題 ---------- */
-
-  function applyTheme() {
-    if (!state.data) return;
-    /* 只有三張圖，直接重畫比逐一改選項簡單也不會漏掉綁在資料上的顏色 */
-    fitters.length = 0;   // 三張圖都會重建，舊的登記一併清掉
-    for (const chart of state.charts) chart.remove();
-    if (state.curveChart) {
-      state.curveChart.remove();
-      state.curveChart = null;
-    }
-    const p = palette();
-    state.charts = [
-      buildStrikeChart(document.getElementById('gexStrikes30d'), state.data.panels['30d'], state.data.snapshot.spot, p),
-      buildStrikeChart(document.getElementById('gexStrikesAll'), state.data.panels.all, state.data.snapshot.spot, p),
-    ];
-    rebuildCurve();
   }
 
   /* ---------- 啟動 ---------- */
@@ -343,20 +347,11 @@
     if (!data.ok || !data.metrics) return;
 
     state.data = data;
-    const p = palette();
-
-    renderStats();
-    renderScenarioControls();
-    renderBucketControls();
-
-    state.charts = [
-      buildStrikeChart(document.getElementById('gexStrikes30d'), data.panels['30d'], data.snapshot.spot, p),
-      buildStrikeChart(document.getElementById('gexStrikesAll'), data.panels.all, data.snapshot.spot, p),
-    ];
-    rebuildCurve();
-
+    renderControls();
+    renderAll();
     document.getElementById('gex').hidden = false;
-    document.addEventListener('themechange', applyTheme);
+
+    document.addEventListener('themechange', renderAll);
   }
 
   boot();

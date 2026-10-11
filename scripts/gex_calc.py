@@ -219,13 +219,14 @@ def main() -> int:
         table = pd.DataFrame({"K": strike_values[mask], "isC": is_call[mask], "g": at_spot[mask]})
         calls = table[table.isC].groupby("K").g.sum()
         puts = table[~table.isC].groupby("K").g.sum()
-        by_strike = pd.DataFrame({"call": calls, "put": -puts}).fillna(0)
-        by_strike["net"] = by_strike.call + by_strike.put
+        # emitted as unsigned magnitudes: the page applies the scenario weights, so
+        # the same numbers can be redrawn for every assumption set without a refetch
+        by_strike = pd.DataFrame({"call": calls, "put": puts}).fillna(0)
         near = by_strike[abs(by_strike.index / spot - 1) < STRIKE_BAND].sort_index()
         panels[key] = {
             "title": title,
-            "strikes": [[float(k), round(c / 1e9, 3), round(p / 1e9, 3), round(n / 1e9, 3)]
-                        for k, c, p, n in zip(near.index, near.call, near.put, near.net)],
+            "strikes": [[float(k), round(c / 1e9, 3), round(p / 1e9, 3)]
+                        for k, c, p in zip(near.index, near.call, near.put)],
         }
 
         call_curve = matrix[:, is_call & mask].sum(1) / 1e9
@@ -259,6 +260,7 @@ def main() -> int:
 
         round_or_none = lambda v: round(v, 0) if v is not None else None  # noqa: E731
         coverage[key] = {
+            "title": title,
             "netGex": nets,
             "flip": {k: round_or_none(v) for k, v in flips.items()},
             "flipExTop5": {k: round_or_none(v) for k, v in trimmed.items()},
