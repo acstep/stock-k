@@ -23,11 +23,21 @@ NQ=F   那斯達克100期貨
 YM=F   道瓊期貨
 
 # 個股
+AAPL   蘋果
+SNDK   SanDisk
+TSLA   特斯拉
+TSM    台積電
+GOOGL  谷歌
+AMZN   亞馬遜
+SKHY   SK 海力士
 NVDA   輝達
 PLTR   Palantir
 MU     美光
+WDC    威騰電子
 MSFT   微軟
 AMD    超微
+INTC   英特爾
+SPXC   SPX科技
 VRT    Vertiv
 META   Meta
 ARM    安謀
@@ -35,8 +45,6 @@ AVGO   博通
 GLW    康寧
 AMAT   應用材料
 NET    Cloudflare
-GOOGL  谷歌
-AMZN   亞馬遜
 GEV    GE Vernova
 ANET   Arista
 ZS     Zscaler
@@ -58,16 +66,9 @@ AMKR   艾克爾
 HPQ    惠普
 SMCI   美超微
 NEE    新紀元能源
-INTC   英特爾
-SPXC   SPX科技
 VST    Vistra
 NRG    NRG Energy
-WDC    威騰電子
 LUMN   Lumen
 
 # 後補
-AAPL   蘋果
-SNDK   SanDisk
-TSLA   特斯拉
-TSM    台積電
-SKHY   SK 海力士
+
