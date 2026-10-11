@@ -328,9 +328,12 @@
     for (const peer of (state.peers && state.peers.peers) || []) {
       const label = `<a href="${peer.url}" target="_blank" rel="noopener">${peer.name}</a>`;
       if (peer.ok) {
-        rows.push(`<tr><td class="name">${label}</td>`
+        const when = peer.stale
+          ? `<span class="note">沿用 ${peer.asOf || peer.fetchedAt || '前次'}</span>`
+          : (peer.asOf || peer.fetchedAt || '—');
+        rows.push(`<tr${peer.stale ? ' class="stale"' : ''}><td class="name">${label}</td>`
           + `<td>${px(peer.zeroGamma, 2)}</td><td>${px(peer.callWall)}</td><td>${px(peer.putWall)}</td>`
-          + `<td>${gex(peer.netGex)}</td><td class="asof">${peer.asOf || '—'}</td></tr>`);
+          + `<td>${gex(peer.netGex)}</td><td class="asof">${when}</td></tr>`);
       } else {
         rows.push(`<tr><td class="name">${label}</td><td>${dash}</td><td>${dash}</td><td>${dash}</td>`
           + `<td>${dash}</td><td class="note">抓取失敗</td></tr>`);
@@ -338,6 +341,23 @@
     }
     rows.push('</tbody>');
     document.getElementById('gexPeerTable').innerHTML = rows.join('');
+
+    /* 這張表最容易被誤讀的地方：Wall 各家的定義不一樣，數字當然不同。 */
+    const oi = bucket.putWallOI;
+    const oiCall = bucket.callWallOI;
+    const flips = [bucket.flip.A, ...((state.peers && state.peers.peers) || [])
+      .filter((p) => p.ok && p.zeroGamma).map((p) => p.zeroGamma)]
+      .filter((v) => v !== null && v !== undefined);
+    const flipSpread = flips.length > 1
+      ? `${px(Math.min(...flips))} ～ ${px(Math.max(...flips))}`
+      : px(bucket.flip.A);
+    document.getElementById('gexPeerNote').innerHTML =
+      '<b>為什麼 Wall 差這麼多：</b>「Wall」沒有統一定義。本站和 FlashAlpha 取 <b>gamma 曝險</b>最大的履約價；'
+      + 'SquawkFlow 和 InsiderFinance 取 <b>未平倉量</b>最大的。同一份資料、同樣只看價外：'
+      + `Put Wall 用 gamma 是 ${px(putWall)}、用未平倉量是 ${oi ? px(oi[0]) : dash}；`
+      + `Call Wall 用 gamma 是 ${px(callWall)}、用未平倉量是 ${oiCall ? px(oiCall[0]) : dash}。`
+      + '兩個都對，量的是不同東西 —— gamma 集中在現價附近，未平倉量集中在整數關卡。'
+      + `同理，Zero Gamma 落在 ${flipSpread} 這一帶，也是假設與到期日範圍不同造成的。`;
   }
 
   /* ---------- 重畫 ---------- */

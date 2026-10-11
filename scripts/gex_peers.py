@@ -115,8 +115,25 @@ FETCHERS = {
 }
 
 
+def load_previous() -> dict:
+    """上一次成功的數字，用來在抓不到時沿用。"""
+    if not OUT_PATH.exists():
+        return {}
+    try:
+        data = json.loads(OUT_PATH.read_text())
+        return {p["key"]: p for p in data.get("peers", []) if p.get("ok")}
+    except (json.JSONDecodeError, OSError, KeyError, TypeError):
+        return {}
+
+
+VALUES = ("spot", "zeroGamma", "callWall", "putWall", "netGex")
+
+
 def main() -> int:
+    previous = load_previous()
+    today = datetime.now(timezone.utc).date().isoformat()
     peers = []
+
     for key, name, url in SOURCES:
         entry = {"key": key, "name": name, "url": url}
         try:
@@ -125,12 +142,24 @@ def main() -> int:
             if missing:
                 raise RuntimeError(f"缺少欄位 {missing}")
             entry.update(values)
-            entry["ok"] = True
+            entry.update({"ok": True, "stale": False, "fetchedAt": today})
             print(f"  {name:15} OK  零伽瑪 {values['zeroGamma']:,.0f}  Call {values['callWall']:,.0f}"
                   f"  Put {values['putWall']:,.0f}  淨GEX {values['netGex']:.2f}B")
         except Exception as exc:  # noqa: BLE001 - one bad source must not stop the rest
-            entry.update({"ok": False, "error": str(exc)[:200]})
-            print(f"  {name:15} 失敗：{exc}")
+            old = previous.get(key)
+            if old:
+                # 沿用上一次成功的數字，但標記 stale 並保留它的日期，不假裝是新的
+                entry.update({k: old.get(k) for k in VALUES})
+                entry.update({
+                    "ok": True, "stale": True,
+                    "asOf": old.get("asOf"), "fetchedAt": old.get("fetchedAt"),
+                    "error": str(exc)[:200],
+                })
+                when = old.get("asOf") or old.get("fetchedAt") or "前次"
+                print(f"  {name:15} 抓取失敗，沿用 {when} 的值（{exc}）")
+            else:
+                entry.update({"ok": False, "stale": False, "error": str(exc)[:200]})
+                print(f"  {name:15} 失敗，沒有可沿用的值：{exc}")
         peers.append(entry)
 
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -139,8 +168,10 @@ def main() -> int:
         "peers": peers,
     }, separators=(",", ":"), ensure_ascii=False))
 
-    ok = sum(1 for p in peers if p["ok"])
-    print(f"\n{ok}/{len(peers)} 個來源成功")
+    fresh = sum(1 for p in peers if p["ok"] and not p["stale"])
+    stale = sum(1 for p in peers if p.get("stale"))
+    failed = sum(1 for p in peers if not p["ok"])
+    print(f"\n{fresh} 個即時、{stale} 個沿用前次、{failed} 個失敗")
     print(f"wrote {OUT_PATH.relative_to(ROOT)} ({OUT_PATH.stat().st_size / 1024:.1f} KB)")
     return 0
 

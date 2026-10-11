@@ -35,6 +35,7 @@ LOOKBACK = 0.15     # sweep spot +/-15% to find where net gamma crosses zero
 GRID_STEP = 5.0
 STRIKE_BAND = 0.12  # strikes emitted for the bar panels; the page narrows this
 WALL_BAND = 0.12    # strikes considered when locating the walls
+OI_WALL_BAND = 0.05  # tighter band for the open-interest wall comparison
 TOP_N = 5           # strikes knocked out for the robustness check
 ATTEMPTS = 4
 
@@ -216,7 +217,8 @@ def main() -> int:
     panels, curve, coverage = {}, {"prices": [float(p) for p in grid]}, {}
 
     for key, (title, mask) in buckets.items():
-        table = pd.DataFrame({"K": strike_values[mask], "isC": is_call[mask], "g": at_spot[mask]})
+        table = pd.DataFrame({"K": strike_values[mask], "isC": is_call[mask],
+                              "g": at_spot[mask], "oi": oi_values[mask]})
         calls = table[table.isC].groupby("K").g.sum()
         puts = table[~table.isC].groupby("K").g.sum()
         # emitted as unsigned magnitudes: the page applies the scenario weights, so
@@ -237,13 +239,21 @@ def main() -> int:
         call_total = float(at_spot[is_call & mask].sum()) / 1e9
         put_total = float(at_spot[~is_call & mask].sum()) / 1e9
 
-        # a wall must be on the correct side of spot, so calls only look above it
-        # and puts only below; otherwise "resistance" can print under the market
+        # Walls have no single definition. Ranking by gamma exposure puts them where
+        # hedging pressure actually concentrates - near spot; ranking by open interest
+        # lands on round strikes much further out. Providers split on this, so both
+        # are published and the page explains why the two disagree.
         wall_table = table[abs(table.K / spot - 1) < WALL_BAND]
         call_by_strike = wall_table[wall_table.isC].groupby("K").g.sum() / 1e9
         put_by_strike = -wall_table[~wall_table.isC].groupby("K").g.sum() / 1e9
         otm_calls = call_by_strike[call_by_strike.index > spot]
         otm_puts = put_by_strike[put_by_strike.index < spot]
+
+        oi_table = table[abs(table.K / spot - 1) < OI_WALL_BAND]
+        oi_calls = oi_table[oi_table.isC].groupby("K").oi.sum()
+        oi_puts = oi_table[~oi_table.isC].groupby("K").oi.sum()
+        otm_calls_oi = oi_calls[oi_calls.index > spot]
+        otm_puts_oi = oi_puts[oi_puts.index < spot]
 
         # the flip is set by a handful of strikes, so show what survives without them
         by_magnitude = wall_table.groupby("K").g.sum().abs().sort_values(ascending=False)
@@ -266,6 +276,8 @@ def main() -> int:
             "flipExTop5": {k: round_or_none(v) for k, v in trimmed.items()},
             "callWall": [float(otm_calls.idxmax()), round(float(otm_calls.max()), 2)] if len(otm_calls) else None,
             "putWall": [float(otm_puts.idxmin()), round(float(otm_puts.min()), 2)] if len(otm_puts) else None,
+            "callWallOI": [float(otm_calls_oi.idxmax()), int(otm_calls_oi.max())] if len(otm_calls_oi) else None,
+            "putWallOI": [float(otm_puts_oi.idxmax()), int(otm_puts_oi.max())] if len(otm_puts_oi) else None,
             "concentration": {
                 "topShare": round(float(by_magnitude.head(TOP_N).sum() / by_magnitude.sum()), 3),
                 "strikes": [[float(k), round(float(v) / 1e9, 1)] for k, v in by_magnitude.head(TOP_N).items()],

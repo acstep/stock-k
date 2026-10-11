@@ -503,6 +503,16 @@ main { padding-bottom: 40px; }
 .gex-peer .na { color: var(--muted); }
 .gex-peer .note { font-family: inherit; font-size: 10.5px; color: var(--badge-fg); }
 .gex-peer .asof { font-family: inherit; font-size: 10.5px; color: var(--muted); }
+.gex-peer tr.stale td { color: var(--muted); }
+
+.gex-peer-note {
+  margin-top: 9px;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.gex-peer-note b { color: var(--text); font-weight: 600; }
 
 /* 履約價範圍控制 */
 
