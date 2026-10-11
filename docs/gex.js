@@ -63,12 +63,38 @@
   }
 
   /* 圖表建立時 autoSize 還沒排好版，此時指定範圍會被覆蓋掉（範圍變成錯的，
-     K 棒細到看不見），所以尺寸一變就重設一次。 */
+     K 棒細到看不見），所以尺寸一變就重設一次。
+     另外，分頁若是在背景開啟，ResizeObserver 的回呼不會執行（它跟
+     requestAnimationFrame 一樣屬於渲染階段），圖表會停在沒尺寸的狀態，
+     因此分頁一變成可見就再套一次。 */
+  const fitters = [];
+
+  function dropFitter(chart) {
+    for (let i = fitters.length - 1; i >= 0; i -= 1) {
+      if (fitters[i].chart === chart) fitters.splice(i, 1);
+    }
+  }
+
+  function refitAll() {
+    for (const { chart, count } of fitters) {
+      try {
+        chart.timeScale().setVisibleLogicalRange({ from: -0.5, to: count - 0.5 });
+      } catch (err) {
+        /* 圖表已經被換掉 */
+      }
+    }
+  }
+
   function fitAll(chart, count) {
     const apply = () => chart.timeScale().setVisibleLogicalRange({ from: -0.5, to: count - 0.5 });
     apply();
     chart.timeScale().subscribeSizeChange(apply);
+    fitters.push({ chart, count });
   }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') requestAnimationFrame(refitAll);
+  });
 
   const strikeTickFormatter = (time) => String(timeToStrike(time));
 
@@ -261,7 +287,10 @@
   }
 
   function rebuildCurve() {
-    if (state.curveChart) state.curveChart.remove();
+    if (state.curveChart) {
+      dropFitter(state.curveChart);
+      state.curveChart.remove();
+    }
     const el = document.getElementById('gexCurve');
     const built = buildCurveChart(el, palette());
     state.curveChart = built.chart;
@@ -286,6 +315,7 @@
   function applyTheme() {
     if (!state.data) return;
     /* 只有三張圖，直接重畫比逐一改選項簡單也不會漏掉綁在資料上的顏色 */
+    fitters.length = 0;   // 三張圖都會重建，舊的登記一併清掉
     for (const chart of state.charts) chart.remove();
     if (state.curveChart) {
       state.curveChart.remove();
