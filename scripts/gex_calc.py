@@ -95,7 +95,7 @@ def prepare(raw: dict):
 
     # SPX monthly settles at the open, SPXW weekly at the close.
     settle_hours = np.where(o.root.values == "SPX", 9.5, 16.0)
-    valuation = session + pd.Timedelta(hours=9.5)
+    valuation = session + pd.to_timedelta(9.5, unit="h")
     settlement = pd.DatetimeIndex(o.exp.values) + pd.to_timedelta(settle_hours, unit="h")
     o["T"] = (settlement - valuation).total_seconds() / (365 * 86400)
     o = o[o["T"] > 0].copy()
@@ -184,7 +184,7 @@ def main() -> int:
         return bs_gamma(price, strike_values, t_values, sigma, carry) * oi_values * 100 * price * price * 0.01
 
     buckets = {
-        "30d": ("30天內到期", (o.exp <= session + pd.Timedelta(days=30)).values),
+        "30d": ("30天內到期", (o.exp <= session + pd.to_timedelta(30, unit="D")).values),
         "all": ("全部到期日", np.ones(len(o), dtype=bool)),
     }
 
