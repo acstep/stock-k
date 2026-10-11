@@ -64,3 +64,10 @@ VST    Vistra
 NRG    NRG Energy
 WDC    威騰電子
 LUMN   Lumen
+
+# 後補
+AAPL   蘋果
+SNDK   SanDisk
+TSLA   特斯拉
+TSM    台積電
+SKHY   SK 海力士
